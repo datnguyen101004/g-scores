@@ -210,6 +210,30 @@ class ReportControllerTest {
     }
 
     @Test
+    void weightsRepeatedScoresAndFindsMedianInsideAndBetweenFrequencyGroups() throws Exception {
+        for (int index = 1; index <= 14; index++) {
+            insert(sbd(index), scoreVector(index <= 4 ? "5.00" : "6.00",
+                    null, null, null, null, null, null, null, null), null);
+        }
+        mockMvc.perform(get("/api/reports/distribution").param("subject", "toan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalStudents").value(14))
+                .andExpect(jsonPath("$.data.averageScore").value(closeTo(80.0 / 14, 0.000001)))
+                .andExpect(jsonPath("$.data.medianScore").value(6.0))
+                .andExpect(jsonPath("$.data.bins[5].count").value(4))
+                .andExpect(jsonPath("$.data.bins[6].count").value(10));
+
+        jdbcTemplate.update("UPDATE exam_scores SET toan = 5.00 WHERE sbd IN (?, ?, ?)",
+                sbd(5), sbd(6), sbd(7));
+        mockMvc.perform(get("/api/reports/distribution").param("subject", "toan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.averageScore").value(5.5))
+                .andExpect(jsonPath("$.data.medianScore").value(5.5))
+                .andExpect(jsonPath("$.data.bins[5].count").value(7))
+                .andExpect(jsonPath("$.data.bins[6].count").value(7));
+    }
+
+    @Test
     void returnsTenEmptyBucketsAndNullMetricsWhenNoSubjectScoresExist() throws Exception {
         MvcResult result = mockMvc.perform(get("/api/reports/distribution").param("subject", "toan"))
                 .andExpect(status().isOk())

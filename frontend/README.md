@@ -51,6 +51,31 @@ Trang Tổng quan gọi một request qua `useApiResource` khi mở trang hoặc
 
 `npm run build` tạo thư mục `dist/`.
 
+### AWS Amplify
+
+Frontend đã được deploy lên <https://development.d2b0ogzeufsr27.amplifyapp.com>.
+
+- AWS region: `ap-southeast-1`.
+- App: `g-scores-frontend`, app ID `d2b0ogzeufsr27`.
+- Hosting branch: `development`.
+- Hình thức: manual deployment của bản build tĩnh trong `dist/`; chưa kết nối GitHub, push code không tự deploy.
+- SPA rewrite phục vụ `index.html` khi mở trực tiếp route React, gồm `/overview` và `/report`; không rewrite `/api/...` thành HTML của ứng dụng.
+
+Để cập nhật bản deploy:
+
+1. Trong `frontend/`, chạy `npm ci` và `npm run build`.
+2. Nén nội dung `dist/` thành ZIP: `index.html` nằm ngay ở gốc archive, giữ nguyên các thư mục `assets/` và `images/`, dùng dấu `/` trong đường dẫn ZIP. Không nén cả thư mục `dist/` làm thư mục cha.
+3. Trong Amplify Console ở region trên, mở app `g-scores-frontend`, chọn branch `development` và deploy bản ZIP mới. Hoặc dùng AWS CLI `amplify create-deployment`, upload ZIP vào `zipUploadUrl` trả về, rồi gọi `amplify start-deployment` với `jobId`, app ID và branch tương ứng.
+4. Chờ deployment thành công; kiểm tra trang chính, mở trực tiếp `/overview`, `/report` và tải các file JS/CSS dưới `/assets/`.
+
+**Frontend đã nối backend:** `https://gscores.tdat.io.vn` trên Amplify gọi `/api/...` cùng origin; rule `/api/<*>` rewrite tới `https://api.gscores.tdat.io.vn/api/<*>`, trước SPA rewrite. Cấu hình nằm trong `infra/amplify-rewrites.json`, đã áp dụng lên app `d2b0ogzeufsr27`. Không cần biến môi trường frontend hoặc CORS cho luồng này. `API_PROXY_TARGET` chỉ dùng trong Vite dev server; `DOCKER_API_PROXY_TARGET` chỉ dùng trong Nginx Docker.
+
+Đã smoke trên browser public: tra cứu `01000001` hiển thị Toán `8,40`; `/overview` hiển thị `1.045.613` thí sinh môn Toán và 10 khoảng điểm; `/report` hiển thị `198.392` thí sinh ≥8 điểm và 17 thí sinh top khối A có đồng hạng. Đã xem giao diện desktop và report mobile. Frontend vẫn triển khai bằng Amplify, không chạy container frontend trên EC2.
+
+Áp dụng lại rules từ root project: `aws amplify update-app --app-id d2b0ogzeufsr27 --region ap-southeast-1 --custom-rules file://infra/amplify-rewrites.json`. Lệnh thay toàn bộ custom rules; giữ API rule trước SPA rule.
+
+### Docker
+
 Để chạy frontend bằng Docker, tạo `.env.production` từ `.env.production.example` nếu chưa có, rồi chạy:
 
 ```powershell
@@ -59,7 +84,7 @@ docker compose --env-file .env.production up --build -d --wait
 
 Mở <http://localhost:3000>. Trong `.env.production`, `DOCKER_API_PROXY_TARGET` là URL backend mà container truy cập được (mặc định `http://host.docker.internal:8080`, không có dấu `/` cuối); `FRONTEND_PORT` mặc định `3000`. Compose chỉ chạy frontend, không tạo backend/database.
 
-Backend image ECR `gscores-be:0.0.1` chưa có API phổ điểm chi tiết. Khi dùng frontend mới, chạy backend từ source hiện tại hoặc triển khai backend image được build lại với tag mới.
+Backend image ECR `gscores-be:0.0.4` đã triển khai trên ECS cùng PostgreSQL và Redis, tối ưu SQL phổ điểm theo tần suất; giữ cache API phổ điểm, thống kê mức điểm và top 10. API/response và rewrite Amplify giữ nguyên. Tag immutable; bản phát hành sau dùng tag mới.
 
 ## Cấu trúc chính
 

@@ -16,6 +16,7 @@ import com.dat.backend.service.ReportService;
 import com.dat.backend.service.ScoreBand;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,7 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
+    @Cacheable(cacheNames = "scoreCounts", key = "#p0 + ':' + #p1")
     public ReportCountResponse countStudents(String subjectCode, String scoreBandCode) {
         ReportSubject subject = ReportSubject.findByApiKey(subjectCode)
                 .orElseThrow(() -> new InvalidReportRequestException(SUBJECT_ERROR));
@@ -59,6 +61,7 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
+    @Cacheable(cacheNames = "scoreDistributions", key = "#p0")
     public ReportDistributionResponse getScoreDistribution(String subjectCode) {
         ReportSubject subject = ReportSubject.findByApiKey(subjectCode)
                 .orElseThrow(() -> new InvalidReportRequestException(SUBJECT_ERROR));

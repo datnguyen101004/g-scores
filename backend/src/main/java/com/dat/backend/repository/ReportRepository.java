@@ -26,33 +26,35 @@ public interface ReportRepository extends JpaRepository<Student, String>, JpaSpe
                 END AS score
                 FROM exam_scores
             ),
-            valid_scores AS MATERIALIZED (
-                SELECT score
+            score_frequencies AS MATERIALIZED (
+                SELECT score, COUNT(*)::bigint AS frequency
                 FROM selected_scores
                 WHERE score IS NOT NULL
+                GROUP BY score
+            ),
+            ordered_frequencies AS (
+                SELECT score, frequency,
+                       SUM(frequency) OVER (
+                           ORDER BY score ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                       )::bigint AS cumulative_count,
+                       SUM(frequency) OVER ()::bigint AS total_count
+                FROM score_frequencies
             ),
             score_summary AS (
                 SELECT
-                    COUNT(*)::bigint AS total_students,
-                    AVG(score) AS average_score,
+                    COALESCE(SUM(frequency), 0)::bigint AS total_students,
+                    SUM(score * frequency) / NULLIF(SUM(frequency), 0) AS average_score,
                     (
-                        SELECT AVG(score)
-                        FROM (
-                            SELECT
-                                score,
-                                ROW_NUMBER() OVER (ORDER BY score) AS score_position,
-                                COUNT(*) OVER () AS score_count
-                            FROM valid_scores
-                        ) ordered_scores
-                        WHERE score_position IN ((score_count + 1) / 2, (score_count + 2) / 2)
-                    ) AS median_score
-                FROM valid_scores
+                        MIN(score) FILTER (WHERE cumulative_count >= (total_count + 1) / 2)
+                        + MIN(score) FILTER (WHERE cumulative_count >= (total_count + 2) / 2)
+                    ) / 2 AS median_score
+                FROM ordered_frequencies
             ),
             histogram AS (
                 SELECT
                     LEAST(FLOOR(score), 9)::integer AS bucket_index,
-                    COUNT(*)::bigint AS bucket_count
-                FROM valid_scores
+                    SUM(frequency)::bigint AS bucket_count
+                FROM score_frequencies
                 GROUP BY 1
             )
             SELECT

@@ -13,6 +13,7 @@ import com.dat.backend.exception.StudentNotFoundException;
 import com.dat.backend.repository.StudentRepository;
 import com.dat.backend.repository.StudentRankingProjection;
 import com.dat.backend.service.StudentService;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,7 @@ public class StudentServiceImpl implements StudentService {
     }
 
     @Override
+    @Cacheable(cacheNames = "topStudents", key = "'A'")
     public TopStudentsResponse getTopStudents() {
         List<StudentRankingProjection> rows = studentRepository.findTopStudents();
         List<RankedStudentResponse> students = new ArrayList<>(rows.size());
