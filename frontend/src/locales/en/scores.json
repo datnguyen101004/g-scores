@@ -1,0 +1,100 @@
+{
+  "page": {
+    "metaTitle": "G-Scores | 2024 High School Graduation Exam Scores",
+    "metaDescription": "Look up accurate 2024 high school graduation exam scores by registration number.",
+    "title": "2024 High School Graduation Exam Scores",
+    "subtitle": "Enter a registration number to view a student's exam scores.",
+    "lookupTitle": "Look up registration number",
+    "lookupIntro": "Enter the complete registration number.",
+    "registrationNumber": "Registration number",
+    "registrationNumberPlaceholder": "Example: 01000001",
+    "lookupAction": "Look up",
+    "loadingAction": "Looking up…",
+    "clearSearch": "Clear search",
+    "loadingScores": "Loading student scores…"
+  },
+  "overview": {
+    "metaTitle": "Overview | G-Scores",
+    "metaDescription": "Explore score counts, average, median, and detailed distributions for each exam subject.",
+    "title": "Overview",
+    "description": "Explore detailed score distributions for the 2024 high school graduation exam subjects.",
+    "distributionTitle": "Detailed score distribution",
+    "subject": "Subject",
+    "loading": "Loading score statistics…",
+    "loadingChart": "Loading chart…",
+    "errorTitle": "Unable to load score statistics",
+    "totalStudents": "Students with a score",
+    "averageScore": "Average score",
+    "medianScore": "Median score",
+    "unavailable": "Unavailable",
+    "empty": "No students have a score in this subject. The count above is zero; average and median are unavailable.",
+    "histogramTitle": "Score histogram",
+    "chartLabel": "Student counts by score interval for {subject}",
+    "students": "Students"
+  },
+  "report": {
+    "metaTitle": "Report | G-Scores",
+    "overview": "Exam score report",
+    "overviewDescription": "Student counts by subject score band and Group A rankings.",
+    "distribution": {
+      "title": "Score distribution",
+      "description": "Four non-overlapping bands; students without a score in the selected subject are excluded.",
+      "subject": "Subject",
+      "chartLabel": "Student counts by four score bands in {subject}",
+      "students": "Students",
+      "total": "Total students with scores: {count}",
+      "loading": "Loading statistics…",
+      "empty": "No students have a score in this subject.",
+      "errorTitle": "Unable to load statistics",
+      "bands": {
+        "GTE_8": "≥ 8 points",
+        "FROM_6_TO_8": "6 ≤ score < 8",
+        "FROM_4_TO_6": "4 ≤ score < 6",
+        "LT_4": "< 4 points"
+      }
+    },
+    "title": "Top 10 Group A students",
+    "description": "Ordered by total Mathematics, Physics and Chemistry scores, then highest subject score. Includes everyone tied at the tenth position.",
+    "rank": "Rank",
+    "total": "Total score",
+    "loading": "Loading rankings…",
+    "empty": "No students have scores in all three Group A subjects.",
+    "count": "Showing {count} students.",
+    "errorTitle": "Unable to load rankings",
+    "errorMessage": "Please try again in a few minutes."
+  },
+  "validation": {
+    "required": "Please enter a registration number."
+  },
+  "student": {
+    "registrationNumber": "Registration number",
+    "foreignLanguageCode": "Foreign language code",
+    "missingScoreHint": "— means no score."
+  },
+  "subjects": {
+    "toan": "Mathematics",
+    "nguVan": "Literature",
+    "ngoaiNgu": "Foreign Language",
+    "vatLi": "Physics",
+    "hoaHoc": "Chemistry",
+    "sinhHoc": "Biology",
+    "lichSu": "History",
+    "diaLi": "Geography",
+    "gdcd": "Civic Education"
+  },
+  "errors": {
+    "notFound": {
+      "title": "Student not found",
+      "message": "Please check the registration number and try again."
+    },
+    "network": {
+      "title": "Unable to connect",
+      "message": "Check your internet connection and try again."
+    },
+    "server": {
+      "title": "Unable to look up scores",
+      "message": "We couldn't load the exam scores right now. Please try again in a few minutes."
+    },
+    "retry": "Retry"
+  }
+}

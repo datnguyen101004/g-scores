@@ -1,0 +1,100 @@
+{
+  "page": {
+    "metaTitle": "G-Scores | Điểm thi THPT 2024",
+    "metaDescription": "Tra cứu điểm thi THPT 2024 chính xác theo số báo danh.",
+    "title": "Điểm thi THPT 2024",
+    "subtitle": "Nhập số báo danh để xem điểm thi của từng thí sinh.",
+    "lookupTitle": "Tra cứu số báo danh",
+    "lookupIntro": "Nhập đầy đủ số báo danh.",
+    "registrationNumber": "Số báo danh",
+    "registrationNumberPlaceholder": "Ví dụ: 01000001",
+    "lookupAction": "Tra cứu",
+    "loadingAction": "Đang tra cứu…",
+    "clearSearch": "Xóa tra cứu",
+    "loadingScores": "Đang tải điểm của thí sinh…"
+  },
+  "overview": {
+    "metaTitle": "Tổng quan điểm thi | G-Scores",
+    "metaDescription": "Xem số lượng, điểm trung bình, trung vị và phân phối điểm chi tiết theo từng môn thi.",
+    "title": "Tổng quan",
+    "description": "Khám phá phân phối chi tiết của các môn trong kỳ thi tốt nghiệp THPT năm 2024.",
+    "distributionTitle": "Phổ điểm chi tiết",
+    "subject": "Môn học",
+    "loading": "Đang tải thống kê điểm…",
+    "loadingChart": "Đang tải biểu đồ…",
+    "errorTitle": "Chưa thể tải thống kê điểm",
+    "totalStudents": "Số thí sinh có điểm",
+    "averageScore": "Điểm trung bình",
+    "medianScore": "Trung vị",
+    "unavailable": "Không khả dụng",
+    "empty": "Môn này chưa có thí sinh có điểm. Số lượng ở trên là 0; điểm trung bình và trung vị không khả dụng.",
+    "histogramTitle": "Biểu đồ phân phối điểm",
+    "chartLabel": "Số thí sinh theo khoảng điểm môn {subject}",
+    "students": "Số thí sinh"
+  },
+  "report": {
+    "metaTitle": "Báo cáo | G-Scores",
+    "overview": "Báo cáo điểm thi",
+    "overviewDescription": "Thống kê số thí sinh theo mức điểm từng môn và bảng xếp hạng khối A.",
+    "distribution": {
+      "title": "Thống kê theo mức điểm",
+      "description": "Bốn mức không trùng nhau; thí sinh không có điểm môn được chọn không được tính.",
+      "subject": "Môn học",
+      "chartLabel": "Số thí sinh theo bốn mức điểm môn {subject}",
+      "students": "Số thí sinh",
+      "total": "Tổng số thí sinh có điểm: {count}",
+      "loading": "Đang tải thống kê…",
+      "empty": "Chưa có thí sinh có điểm môn này.",
+      "errorTitle": "Chưa thể tải thống kê",
+      "bands": {
+        "GTE_8": "≥ 8 điểm",
+        "FROM_6_TO_8": "6 ≤ điểm < 8",
+        "FROM_4_TO_6": "4 ≤ điểm < 6",
+        "LT_4": "< 4 điểm"
+      }
+    },
+    "title": "Top 10 thí sinh khối A",
+    "description": "Xếp theo tổng Toán, Vật lí, Hóa học; đồng tổng điểm thì xét điểm môn cao nhất. Bao gồm tất cả thí sinh đồng hạng ở vị trí thứ 10.",
+    "rank": "Hạng",
+    "total": "Tổng điểm",
+    "loading": "Đang tải bảng xếp hạng…",
+    "empty": "Chưa có thí sinh đủ điểm Toán, Vật lí và Hóa học.",
+    "count": "Hiển thị {count} thí sinh.",
+    "errorTitle": "Chưa thể tải bảng xếp hạng",
+    "errorMessage": "Vui lòng thử lại sau ít phút."
+  },
+  "validation": {
+    "required": "Vui lòng nhập số báo danh."
+  },
+  "student": {
+    "registrationNumber": "Số báo danh",
+    "foreignLanguageCode": "Mã ngoại ngữ",
+    "missingScoreHint": "Dấu — nghĩa là không có điểm."
+  },
+  "subjects": {
+    "toan": "Toán",
+    "nguVan": "Ngữ văn",
+    "ngoaiNgu": "Ngoại ngữ",
+    "vatLi": "Vật lí",
+    "hoaHoc": "Hóa học",
+    "sinhHoc": "Sinh học",
+    "lichSu": "Lịch sử",
+    "diaLi": "Địa lí",
+    "gdcd": "GDCD"
+  },
+  "errors": {
+    "notFound": {
+      "title": "Chưa tìm thấy thí sinh",
+      "message": "Vui lòng kiểm tra lại số báo danh rồi tra cứu lại."
+    },
+    "network": {
+      "title": "Không thể kết nối",
+      "message": "Vui lòng kiểm tra kết nối mạng của bạn rồi thử lại."
+    },
+    "server": {
+      "title": "Chưa thể tra cứu lúc này",
+      "message": "Chúng tôi chưa thể tải điểm thi. Bạn vui lòng thử lại sau ít phút."
+    },
+    "retry": "Thử lại"
+  }
+}
