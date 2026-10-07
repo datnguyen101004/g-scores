@@ -137,11 +137,13 @@ Stack [`github-actions-ecr.yaml`](../infra/github-actions-ecr.yaml) tạo OIDC p
 
 Role được login ECR và đọc/upload layer, push manifest vào **duy nhất** repository `gscores-be`. Không được tạo/xóa repository, deploy ECS hoặc đọc Secrets Manager.
 
-Job deploy dùng role OIDC riêng `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy`: chỉ cập nhật/đọc stack `g-scores-app` và pass role `g-scores-production-cloudformation-deploy` cho CloudFormation. Role CloudFormation chỉ đăng ký task definition, quản lý revision trong task family production, cập nhật service hiện có và pass execution role hiện có cho ECS; không có quyền sửa database volume, IAM hay đọc secrets.
+Job deploy dùng role OIDC riêng `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy`: chỉ cập nhật/đọc stack `g-scores-app` và pass role `g-scores-production-cloudformation-deploy` cho CloudFormation. Role CloudFormation chỉ đăng ký task definition, quản lý revision trong task family production, cập nhật service hiện có và đọc/pass execution role hiện có cho ECS; không có quyền sửa database volume, IAM hay đọc secrets. `iam:GetRole` trên đúng execution role cần thiết để CloudFormation resolve thuộc tính ARN.
 
 **Có gián đoạn khi deploy:** PostgreSQL, Redis và backend nằm chung task, service có một replica với `MinimumHealthyPercent=0`/`MaximumPercent=100`. Task cũ dừng trước khi task mới chạy; volume PostgreSQL được giữ lại, Redis cache khởi tạo lại. ECS deployment circuit breaker bật rollback. Nếu deploy thất bại, workflow in stack events; kiểm tra stack đã rollback và API đã phục hồi trước lượt tiếp theo. Pipeline không tự rollback lỗi smoke sau một stack update đã thành công.
 
 Nginx host không nằm trong ECS task và không được job này deploy tự động. Cấu hình [`infra/nginx.conf`](../infra/nginx.conf) được đồng bộ riêng lên `/etc/nginx/nginx.conf`, kiểm tra bằng `nginx -t` rồi reload; giữ `worker_connections 4096`. Xem [so sánh worker_connections](../k6/README.md#4-điều-chỉnh-nginx-worker_connections).
+
+Đã kiểm chứng end-to-end ngày **07/10/2026**: [GitHub Actions run 37576843140](https://github.com/datnguyen101004/g-scores/actions/runs/37576843140) hoàn tất verify → publish → deploy; stack `UPDATE_COMPLETE`, task family production revision `2`, cả ba container healthy. Database giữ **1.061.605 thí sinh**; tra cứu SBD, top 10 và phổ điểm trả HTTP 200 qua cả origin và API public. Nginx production khớp file cấu hình trong repo. Đây là kết quả của lượt deploy này, không phải cam kết zero-downtime.
 
 Áp dụng/cập nhật stack từ root repository bằng AWS credentials quản trị hạ tầng:
 
