@@ -169,6 +169,8 @@ Volume và backup hiện nằm trên EC2/EBS, không phải database HA. Khi đ�
 
 Cutover ngày **07/10/2026** đã dùng lại đúng volume `postgres-data` và xác nhận **1.061.605 thí sinh** trước khi bật backend độc lập. Backup PostgreSQL custom-format trước cutover nằm tại `/var/backups/g-scores/before-ecs-split-20261007T055729Z.dump` trên EC2; đã kiểm tra archive có dữ liệu bảng `exam_scores`. Backup này cũng nằm trên host, không thay thế backup off-host.
 
+Đã kiểm chứng bằng [GitHub Actions run 37580784636](https://github.com/datnguyen101004/g-scores/actions/runs/37580784636): **34 tests pass**, build/push và deploy thành công; backend đổi task, task definition **revision 3 → 4**. Task ARN và `startedAt` của PostgreSQL/Redis giữ nguyên trước/sau deploy; cả ba task healthy, database vẫn có **1.061.605 thí sinh**, lookup trả HTTP 200 qua origin và public. Chạy lại chính bước update với digest/template không đổi đã xác nhận no-op và không thay task nào.
+
 Áp dụng/cập nhật stack từ root repository bằng AWS credentials quản trị hạ tầng:
 
 ```bash
