@@ -104,6 +104,9 @@ Resources:
                   - ecs:ListTagsForResource
                 Resource: !Ref ProductionServiceArn
               - Effect: Allow
+                Action: iam:GetRole
+                Resource: !Ref ProductionExecutionRoleArn
+              - Effect: Allow
                 Action: iam:PassRole
                 Resource: !Ref ProductionExecutionRoleArn
                 Condition:
