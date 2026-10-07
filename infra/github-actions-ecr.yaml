@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GitHub Actions OIDC identity and backend ECR push role; no deployment permissions.
+
+Parameters:
+  GitHubSubjectPrefix:
+    Type: String
+    Default: repo:datnguyen101004@118203091/g-scores@1405569743
+    Description: Exact sub_claim_prefix from the repository GitHub OIDC customization API.
+  GitHubBranch:
+    Type: String
+    Default: development
+  EcrRepositoryName:
+    Type: String
+    Default: gscores-be
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  BackendImagePushRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: g-scores-github-backend-ecr-push
+      Description: Allow the trusted GitHub development branch to push backend images to ECR.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub '${GitHubSubjectPrefix}:ref:refs/heads/${GitHubBranch}'
+      Policies:
+        - PolicyName: BackendEcrPush
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: RegistryAuthentication
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Sid: PushBackendImage
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:BatchGetImage
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryName}'
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt BackendImagePushRole.Arn
+  RepositoryUri:
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${EcrRepositoryName}'
