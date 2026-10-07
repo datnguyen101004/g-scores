@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useSidebar } from "@/context/SidebarContext";
 import LanguageDropdown from "@/components/header/LanguageDropdown";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router";
 import { GridIcon } from "../icons";
 import { cn } from "../utils";
@@ -16,25 +16,50 @@ const AppSidebar = () => {
   const isOverviewActive = location.pathname === "/overview";
   const isDashboardActive = location.pathname === "/";
   const isReportActive = location.pathname === "/report";
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isMobileOpen) {
       return;
     }
 
+    const sidebar = sidebarRef.current;
+    const opener = document.querySelector<HTMLButtonElement>('button[aria-controls="app-sidebar"]');
     const closeMobileSidebar = () => setIsMobileOpen(false);
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         closeMobileSidebar();
+        return;
+      }
+      if (event.key !== "Tab" || !sidebar) return;
+
+      const focusable = Array.from(
+        sidebar.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+      ).filter((element) => element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+
+      const outside = !sidebar.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || outside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || outside)) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
+    closeButtonRef.current?.focus();
     window.addEventListener("popstate", closeMobileSidebar);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.removeEventListener("popstate", closeMobileSidebar);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", handleKeyDown);
+      if (opener?.getClientRects().length) opener.focus();
     };
   }, [isMobileOpen, setIsMobileOpen]);
 
@@ -45,8 +70,11 @@ const AppSidebar = () => {
   };
 
   return (
-    <aside
+    <div
+      ref={sidebarRef}
       id="app-sidebar"
+      role={isMobileOpen ? "dialog" : "complementary"}
+      aria-modal={isMobileOpen ? true : undefined}
       aria-label={t("app.sidebar.navigationLabel")}
       className={cn(
         "fixed inset-s-0 top-0 z-50 h-dvh flex-col border-e border-gray-200 bg-white px-5 text-gray-900 transition-all duration-300 ease-in-out xl:translate-x-0 xl:rtl:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
@@ -92,6 +120,7 @@ const AppSidebar = () => {
           )}
         </Link>
         <button
+          ref={closeButtonRef}
           type="button"
           aria-label={t("app.sidebar.closeMenu")}
           onClick={() => setIsMobileOpen(false)}
@@ -178,7 +207,7 @@ const AppSidebar = () => {
         <LanguageDropdown compact={!isSidebarExpanded} />
         <ThemeToggleButton />
       </div>
-    </aside>
+    </div>
   );
 };
 

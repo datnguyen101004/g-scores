@@ -1,0 +1,142 @@
+{
+  "run": "nginx-2048-20261007T042516Z",
+  "capturedAtUtc": "2026-10-07T04:25:26.231Z",
+  "workerConnectionsBefore": 1024,
+  "workerConnectionsAfter": 2048,
+  "target": "https://gscores.tdat.io.vn",
+  "instances": [
+    {
+      "id": "i-0ca15f1d1e04c71f4",
+      "type": "t3.medium",
+      "state": "running"
+    },
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.large",
+      "state": "stopped"
+    }
+  ],
+  "cpuCreditBefore": {
+    "Label": "CPUCreditBalance",
+    "Datapoints": [
+      {
+        "Timestamp": "2026-10-07T11:06:00+07:00",
+        "Average": 277.69845003333336,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:11:00+07:00",
+        "Average": 279.45532188333334,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:16:00+07:00",
+        "Average": 281.2099953,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:21:00+07:00",
+        "Average": 282.96481206666664,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T10:56:00+07:00",
+        "Average": 274.1902471166667,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:01:00+07:00",
+        "Average": 275.94450838333336,
+        "Unit": "Count"
+      }
+    ]
+  },
+  "nginxLogOffsets": {
+    "errorLogBytes": 594160,
+    "accessLogBytes": 63989244
+  },
+  "generatorDuring": [
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.4xlarge",
+      "state": "running"
+    }
+  ],
+  "notes": [
+    "Same public route,10000uniqueSBDs,1request/VU,20sbarrier,60stimeout,no retries, same generator type as baseline",
+    "Different test times: host/JVM/database warm state,CPU credits and network may differ; one run each, not isolated statistical proof",
+    "Latest sampler includes optional table counters absent in baseline; compare common host/container metrics only"
+  ],
+  "nginxDiagnostics": {
+    "errorRows": 18,
+    "workerConnectionLimitErrors": 18,
+    "burstAccessRows": 9223,
+    "burstAccessStatuses": {
+      "200": 9223
+    },
+    "errorExamples": [
+      "2026/10/07 04:29:55 [warn] 300090#300090: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:55 [warn] 300089#300089: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:56 [warn] 300090#300090: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:56 [warn] 300089#300089: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:57 [warn] 300089#300089: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:57 [warn] 300090#300090: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:58 [warn] 300090#300090: 2048 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:29:58 [warn] 300089#300089: 2048 worker_connections are not enough, reusing connections"
+    ]
+  },
+  "firstRecovery": {
+    "timestampUtc": "2026-10-07T04:30:45.932Z",
+    "status": 429,
+    "correct": false
+  },
+  "finalRecovery": {
+    "timestampUtc": "2026-10-07T04:34:15Z",
+    "publicStatus": 200,
+    "publicCorrect": true,
+    "originStatus": 200,
+    "originCorrect": true
+  },
+  "generatorAfter": [
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.large",
+      "state": "stopped"
+    }
+  ],
+  "publicRecoveryChecks": {
+    "attempts": [
+      {
+        "timestampUtc": "2026-10-07T04:33:45Z",
+        "status": 429,
+        "correct": false
+      },
+      {
+        "timestampUtc": "2026-10-07T04:34:15Z",
+        "status": 200,
+        "correct": true
+      }
+    ],
+    "recovered": true
+  },
+  "cpuCreditAfter": {
+    "Label": "CPUCreditBalance",
+    "Datapoints": [
+      {
+        "Timestamp": "2026-10-07T11:20:00+07:00",
+        "Average": 281.2099953,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:25:00+07:00",
+        "Average": 282.96481206666664,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:30:00+07:00",
+        "Average": 284.09748706666664,
+        "Unit": "Count"
+      }
+    ]
+  }
+}

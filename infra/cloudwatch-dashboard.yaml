@@ -1,0 +1,363 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: G-Scores production CloudWatch dashboard for native EC2/ECS metrics, host telemetry, Nginx metrics, and production logs.
+
+Parameters:
+  DashboardName:
+    Type: String
+    Default: g-scores-production
+    Description: CloudWatch dashboard name.
+  InstanceId:
+    Type: AWS::EC2::Instance::Id
+    Default: i-0ca15f1d1e04c71f4
+    Description: Existing production ECS EC2 host.
+  ClusterName:
+    Type: String
+    Default: g-scores-ecs-EcsCluster-RA8qSZM9ePV1
+    Description: Existing production ECS cluster.
+  BackendServiceName:
+    Type: String
+    Default: g-scores-app-Service-HnEgGHuFPzdg
+    Description: Existing backend ECS service.
+  PostgresServiceName:
+    Type: String
+    Default: g-scores-postgres
+    Description: Existing PostgreSQL ECS service.
+  RedisServiceName:
+    Type: String
+    Default: g-scores-redis
+    Description: Existing Redis ECS service.
+  AppLogGroupName:
+    Type: String
+    Default: g-scores-app-LogGroup-LTjcs6M9AW3U
+    Description: Existing backend application log group.
+  DataLogGroupName:
+    Type: String
+    Default: g-scores-data-LogGroup-EMhaHYYJTkha
+    Description: Existing PostgreSQL and Redis log group.
+
+Resources:
+  ProductionDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Ref DashboardName
+      DashboardBody: !Sub |
+        {
+          "periodOverride": "inherit",
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 3,
+              "properties": {
+                "markdown": "### G-Scores production monitoring\nNative EC2 metrics and CPU credits use 300-second basic-monitoring periods; custom host and ECS service metrics use 60 seconds. EC2 CPUUtilization is whole-host CPU. ECS service CPUUtilization is based on task reserved CPU and can exceed 100% when bursting. ECS MemoryUtilization uses memoryReservation when configured, otherwise the task/container hard memory limit; these production task definitions configure hard memory limits and no memoryReservation. Nginx latency percentiles use request_time only; they exclude CDN/browser and TLS connection costs outside Nginx request_time. Missing request-duration samples remain missing."
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 3,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "EC2 CPU utilization (whole host)",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "stat": "Average",
+                "metrics": [
+                  ["AWS/EC2", "CPUUtilization", "InstanceId", "${InstanceId}", {"label": "EC2 CPU %", "stat": "Average"}]
+                ],
+                "yAxis": {"left": {"min": 0, "max": 100, "label": "Percent"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 3,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "EC2 CPU credits (300-second period)",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/EC2", "CPUCreditBalance", "InstanceId", "${InstanceId}", {"label": "Credit balance", "stat": "Average"}],
+                  ["AWS/EC2", "CPUCreditUsage", "InstanceId", "${InstanceId}", {"label": "Credits used", "stat": "Sum"}]
+                ],
+                "yAxis": {"left": {"label": "CPU credits"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 3,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "EC2 network traffic",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/EC2", "NetworkIn", "InstanceId", "${InstanceId}", {"label": "Inbound", "stat": "Sum"}],
+                  ["AWS/EC2", "NetworkOut", "InstanceId", "${InstanceId}", {"label": "Outbound", "stat": "Sum"}]
+                ],
+                "yAxis": {"left": {"label": "Bytes per 5 minutes"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 9,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "EC2 status checks",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "stat": "Maximum",
+                "metrics": [
+                  ["AWS/EC2", "StatusCheckFailed_Instance", "InstanceId", "${InstanceId}", {"label": "Instance check", "stat": "Maximum"}],
+                  ["AWS/EC2", "StatusCheckFailed_System", "InstanceId", "${InstanceId}", {"label": "System check", "stat": "Maximum"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Failed checks (0 or 1)"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 9,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Host CPU busy, I/O wait, and steal",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "stat": "Average",
+                "metrics": [
+                  [{"expression": "100-m1", "label": "CPU busy", "id": "e1"}],
+                  ["GScores/Host", "cpu_usage_idle", "InstanceId", "${InstanceId}", {"id": "m1", "stat": "Average", "visible": false}],
+                  ["GScores/Host", "cpu_usage_iowait", "InstanceId", "${InstanceId}", {"label": "I/O wait", "stat": "Average"}],
+                  ["GScores/Host", "cpu_usage_steal", "InstanceId", "${InstanceId}", {"label": "Steal", "stat": "Average"}]
+                ],
+                "yAxis": {"left": {"min": 0, "max": 100, "label": "Percent"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 9,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Host memory and root filesystem use",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "stat": "Average",
+                "metrics": [
+                  ["GScores/Host", "mem_used_percent", "InstanceId", "${InstanceId}", {"label": "Memory used", "stat": "Average"}],
+                  ["GScores/Host", "disk_used_percent", "InstanceId", "${InstanceId}", {"label": "Root filesystem used", "stat": "Average"}]
+                ],
+                "yAxis": {"left": {"min": 0, "max": 100, "label": "Percent"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 15,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Backend ECS CPU and memory utilization",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${BackendServiceName}", {"label": "Backend CPU %", "stat": "Average"}],
+                  ["AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${BackendServiceName}", {"label": "Backend memory %", "stat": "Average"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Percent"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 15,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "PostgreSQL ECS CPU and memory utilization",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${PostgresServiceName}", {"label": "PostgreSQL CPU %", "stat": "Average"}],
+                  ["AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${PostgresServiceName}", {"label": "PostgreSQL memory %", "stat": "Average"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Percent"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 15,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Redis ECS CPU and memory utilization",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${RedisServiceName}", {"label": "Redis CPU %", "stat": "Average"}],
+                  ["AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${RedisServiceName}", {"label": "Redis memory %", "stat": "Average"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Percent"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 21,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "ECS running task count (LiveTaskCount; not health)",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["AWS/ECS", "LiveTaskCount", "ClusterName", "${ClusterName}", "ServiceName", "${BackendServiceName}", {"label": "Backend running task count", "stat": "Maximum"}],
+                  ["AWS/ECS", "LiveTaskCount", "ClusterName", "${ClusterName}", "ServiceName", "${PostgresServiceName}", {"label": "PostgreSQL running task count", "stat": "Maximum"}],
+                  ["AWS/ECS", "LiveTaskCount", "ClusterName", "${ClusterName}", "ServiceName", "${RedisServiceName}", {"label": "Redis running task count", "stat": "Maximum"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Running tasks"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 21,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Observed API request rate",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["GScores/Nginx", "RequestCount", {"id": "m1", "stat": "Sum", "visible": false}],
+                  [{"expression": "m1/PERIOD(m1)", "label": "API requests per second", "id": "e1"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Requests per second"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 27,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API HTTP errors and error percentage",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["GScores/Nginx", "RequestCount", {"id": "m1", "stat": "Sum", "visible": false}],
+                  ["GScores/Nginx", "HttpErrorCount", {"id": "m2", "label": "HTTP errors (status >= 400)", "stat": "Sum", "yAxis": "left"}],
+                  ["GScores/Nginx", "ServerErrorCount", {"id": "m3", "label": "HTTP 5xx", "stat": "Sum", "yAxis": "left"}],
+                  [{"expression": "100*m2/m1", "label": "API error percentage (status >= 400)", "id": "e1", "yAxis": "right"}]
+                ],
+                "yAxis": {
+                  "left": {"min": 0, "label": "Errors per minute"},
+                  "right": {"min": 0, "max": 100, "label": "Percent"}
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 27,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Nginx API request latency (request_time, seconds)",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 60,
+                "metrics": [
+                  ["GScores/Nginx", "RequestDurationSeconds", {"label": "p95 request_time", "stat": "p95"}],
+                  ["GScores/Nginx", "RequestDurationSeconds", {"label": "p99 request_time", "stat": "p99"}]
+                ],
+                "yAxis": {"left": {"min": 0, "label": "Seconds"}}
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 33,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Recent backend errors",
+                "view": "table",
+                "region": "${AWS::Region}",
+                "query": "SOURCE '${AppLogGroupName}'\n| fields @timestamp, @message, @logStream\n| filter @message like /(?i)(error|exception|failed)/\n| sort @timestamp desc\n| limit 50"
+              }
+            },
+            {
+              "type": "log",
+              "x": 12,
+              "y": 33,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Recent PostgreSQL and Redis warnings/errors",
+                "view": "table",
+                "region": "${AWS::Region}",
+                "query": "SOURCE '${DataLogGroupName}'\n| fields @timestamp, @message, @logStream\n| filter @message like /(?i)(warning|error|fatal|panic)/\n| sort @timestamp desc\n| limit 50"
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 39,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Recent Nginx errors",
+                "view": "table",
+                "region": "${AWS::Region}",
+                "query": "SOURCE '/g-scores/nginx/error'\n| fields @timestamp, @message, @logStream\n| filter @message like /(?i)(error|crit|alert|emerg)/\n| sort @timestamp desc\n| limit 50"
+              }
+            },
+            {
+              "type": "log",
+              "x": 12,
+              "y": 39,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Recent API HTTP errors (structured Nginx access events)",
+                "view": "table",
+                "region": "${AWS::Region}",
+                "query": "SOURCE '/g-scores/nginx/access'\n| fields @timestamp, time, method, path, status, request_time, upstream_time, request_id\n| filter path like /^\\/api\\// and status >= 400\n| sort @timestamp desc\n| limit 50"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  DashboardName:
+    Description: Name of the production CloudWatch dashboard.
+    Value: !Ref ProductionDashboard
+  DashboardUrl:
+    Description: Region-specific AWS Console URL for the dashboard.
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${DashboardName}'

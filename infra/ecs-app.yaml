@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: G-Scores backend, PostgreSQL and authenticated Redis cache on a single existing ECS EC2 host.
+Description: G-Scores backend-only ECS service; PostgreSQL and Redis are managed separately by g-scores-data.
 
 Parameters:
   ClusterName:
@@ -7,6 +7,15 @@ Parameters:
   BackendImage:
     Type: String
     Description: Immutable ECR runtime image URI including tag or digest.
+  TaskFamily:
+    Type: String
+    Default: g-scores-app-TaskDefinition-PrT3TvNO1ydM
+    Description: Keep a stable task family across image updates.
+  HostInstanceId:
+    Type: String
+    AllowedPattern: '^i-[0-9a-f]+$'
+    Default: i-0ca15f1d1e04c71f4
+    Description: The existing host running the independent PostgreSQL and Redis services.
 
 Resources:
   DatabaseSecret:
@@ -23,6 +32,8 @@ Resources:
 
   RedisSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Description: G-Scores Redis cache password.
       GenerateSecretString:
@@ -60,99 +71,32 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
+      Family: !Ref TaskFamily
       RequiresCompatibilities:
         - EC2
-      NetworkMode: bridge
+      NetworkMode: host
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
-      Volumes:
-        - Name: postgres-data
-          DockerVolumeConfiguration:
-            Scope: shared
-            Autoprovision: true
-            Driver: local
       ContainerDefinitions:
-        - Name: postgres
-          Image: postgres:17-alpine
-          Essential: true
-          Cpu: 512
-          Memory: 768
-          Environment:
-            - Name: POSTGRES_DB
-              Value: g_scores
-            - Name: POSTGRES_USER
-              Value: g_scores
-          Secrets:
-            - Name: POSTGRES_PASSWORD
-              ValueFrom: !Sub '${DatabaseSecret}:password::'
-          MountPoints:
-            - SourceVolume: postgres-data
-              ContainerPath: /var/lib/postgresql/data
-          HealthCheck:
-            Command:
-              - CMD-SHELL
-              - pg_isready -U g_scores -d g_scores
-            Interval: 10
-            Timeout: 5
-            Retries: 5
-            StartPeriod: 30
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref LogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: postgres
-        - Name: redis
-          Image: redis:7.4.2-alpine
-          Essential: true
-          Cpu: 128
-          Memory: 128
-          Command:
-            - sh
-            - -c
-            - exec redis-server --save '' --appendonly no --maxmemory 64mb --maxmemory-policy allkeys-lru --requirepass "$REDIS_PASSWORD"
-          Secrets:
-            - Name: REDIS_PASSWORD
-              ValueFrom: !Ref RedisSecret
-          HealthCheck:
-            Command:
-              - CMD-SHELL
-              - test "$(REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping)" = PONG
-            Interval: 10
-            Timeout: 5
-            Retries: 5
-            StartPeriod: 10
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref LogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: redis
         - Name: backend
           Image: !Ref BackendImage
           Essential: true
           Cpu: 1024
           Memory: 2048
-          Links:
-            - postgres:postgres
-            - redis:redis
-          DependsOn:
-            - ContainerName: postgres
-              Condition: HEALTHY
-            - ContainerName: redis
-              Condition: HEALTHY
           Environment:
             - Name: SERVER_PORT
               Value: '8080'
+            - Name: SERVER_ADDRESS
+              Value: 127.0.0.1
             - Name: SPRING_PROFILES_ACTIVE
               Value: production
             - Name: SPRING_DATA_REDIS_HOST
-              Value: redis
+              Value: 127.0.0.1
             - Name: SPRING_DATA_REDIS_PORT
               Value: '6379'
             - Name: CACHE_TTL_SECONDS
               Value: '3600'
             - Name: SPRING_DATASOURCE_URL
-              Value: jdbc:postgresql://postgres:5432/g_scores
+              Value: jdbc:postgresql://127.0.0.1:5432/g_scores
             - Name: SPRING_DATASOURCE_USERNAME
               Value: g_scores
             - Name: JAVA_TOOL_OPTIONS
@@ -188,6 +132,9 @@ Resources:
       LaunchType: EC2
       DesiredCount: 1
       TaskDefinition: !Ref TaskDefinition
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: !Sub "ec2InstanceId == '${HostInstanceId}'"
       DeploymentConfiguration:
         MinimumHealthyPercent: 0
         MaximumPercent: 100

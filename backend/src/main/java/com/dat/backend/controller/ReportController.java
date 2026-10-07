@@ -60,8 +60,8 @@ public class ReportController {
 
     @GetMapping("/distribution")
     @Operation(summary = "Phổ điểm và thống kê điểm trung bình theo môn",
-            description = "Trả về số điểm, trung bình, trung vị và 20 khoảng điểm rộng 0.5. "
-                    + "Điểm null bị loại; điểm 10 thuộc khoảng cuối [9.5, 10].")
+            description = "Trả về số thí sinh có điểm, trung bình, trung vị và 10 khoảng điểm rộng 1. "
+                    + "Điểm null bị loại; điểm 10 thuộc khoảng cuối [9, 10].")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Phổ điểm của môn được chọn",
                     useReturnTypeSchema = true, content = @Content(mediaType = "application/json")),

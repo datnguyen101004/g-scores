@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GitHub OIDC roles for backend ECR publishing and production CloudFormation deployment.
+
+Parameters:
+  GitHubSubjectPrefix:
+    Type: String
+    Default: repo:datnguyen101004@118203091/g-scores@1405569743
+    Description: Exact sub_claim_prefix from the repository GitHub OIDC customization API.
+  GitHubBranch:
+    Type: String
+    Default: development
+  EcrRepositoryName:
+    Type: String
+    Default: gscores-be
+  ProductionStackName:
+    Type: String
+    Default: g-scores-app
+  ProductionServiceArn:
+    Type: String
+    Default: arn:aws:ecs:ap-southeast-1:329539068073:service/g-scores-ecs-EcsCluster-RA8qSZM9ePV1/g-scores-app-Service-HnEgGHuFPzdg
+  ProductionTaskFamily:
+    Type: String
+    Default: g-scores-app-TaskDefinition-PrT3TvNO1ydM
+  ProductionExecutionRoleArn:
+    Type: String
+    Default: arn:aws:iam::329539068073:role/g-scores-app-ExecutionRole-lqtFJbsRSbgz
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  BackendImagePushRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: g-scores-github-backend-ecr-push
+      Description: Allow the trusted GitHub development branch to push backend images to ECR.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub '${GitHubSubjectPrefix}:ref:refs/heads/${GitHubBranch}'
+      Policies:
+        - PolicyName: BackendEcrPush
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: RegistryAuthentication
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Sid: PushBackendImage
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:BatchGetImage
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryName}'
+
+  ProductionCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: g-scores-production-cloudformation-deploy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: UpdateExistingBackendService
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecs:RegisterTaskDefinition
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DeregisterTaskDefinition
+                  - ecs:TagResource
+                  - ecs:UntagResource
+                  - ecs:ListTagsForResource
+                Resource: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${ProductionTaskFamily}:*'
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - ecs:ListTagsForResource
+                Resource: !Ref ProductionServiceArn
+              - Effect: Allow
+                Action: iam:GetRole
+                Resource: !Ref ProductionExecutionRoleArn
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !Ref ProductionExecutionRoleArn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+
+  BackendProductionDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: g-scores-github-backend-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub '${GitHubSubjectPrefix}:ref:refs/heads/${GitHubBranch}'
+      Policies:
+        - PolicyName: DeployExistingProductionStack
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionStackName}/*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt ProductionCloudFormationRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt BackendImagePushRole.Arn
+  RepositoryUri:
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${EcrRepositoryName}'
+  DeploymentRoleArn:
+    Value: !GetAtt BackendProductionDeployRole.Arn
+  CloudFormationRoleArn:
+    Value: !GetAtt ProductionCloudFormationRole.Arn

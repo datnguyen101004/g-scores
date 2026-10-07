@@ -1,0 +1,171 @@
+name: Backend CI and production deploy
+
+on:
+  pull_request:
+    branches: [development, main]
+    paths:
+      - 'backend/**'
+      - 'dataset/**'
+      - '.github/workflows/backend-image.yaml'
+      - 'infra/github-actions-ecr.yaml'
+      - 'infra/ecs-app.yaml'
+  push:
+    branches: [development]
+    paths:
+      - 'backend/**'
+      - 'dataset/**'
+      - '.github/workflows/backend-image.yaml'
+      - 'infra/github-actions-ecr.yaml'
+      - 'infra/ecs-app.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Run backend verification
+        working-directory: backend
+        run: bash ./mvnw -B -ntp verify
+
+  publish:
+    name: Publish backend image
+    needs: verify
+    if: github.ref == 'refs/heads/development' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY_URI: ${{ vars.ECR_REPOSITORY_URI }}
+      IMAGE_TAG: sha-${{ github.sha }}-run${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Assume AWS role using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: github-backend-${{ github.run_id }}
+          allowed-account-ids: '329539068073'
+          role-duration-seconds: 1800
+      - name: Log in to ECR
+        shell: bash
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin "${ECR_REPOSITORY_URI%%/*}"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build and push backend image
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.ECR_REPOSITORY_URI }}:${{ env.IMAGE_TAG }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Record published image
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          printf '## Backend image\n\n- Tag: `%s:%s`\n- Digest: `%s@%s`\n' \
+            "$ECR_REPOSITORY_URI" "$IMAGE_TAG" "$ECR_REPOSITORY_URI" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      - name: Log out of ECR
+        if: always()
+        run: docker logout "${ECR_REPOSITORY_URI%%/*}"
+
+  deploy:
+    name: Deploy ECS production
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      STACK_NAME: ${{ vars.ECS_STACK_NAME }}
+      CLOUDFORMATION_ROLE_ARN: ${{ vars.CLOUDFORMATION_ROLE_ARN }}
+      IMAGE_URI: ${{ vars.ECR_REPOSITORY_URI }}@${{ needs.publish.outputs.digest }}
+    steps:
+      - name: Check out deployment template
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Assume production deployment role using OIDC
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: github-deploy-${{ github.run_id }}
+          role-duration-seconds: 3600
+          allowed-account-ids: '329539068073'
+      - name: Update production stack with published digest
+        shell: bash
+        run: |
+          if result=$(aws cloudformation update-stack \
+            --stack-name "$STACK_NAME" \
+            --template-body file://infra/ecs-app.yaml \
+            --role-arn "$CLOUDFORMATION_ROLE_ARN" \
+            --capabilities CAPABILITY_IAM \
+            --parameters ParameterKey=ClusterName,UsePreviousValue=true \
+              ParameterKey=TaskFamily,UsePreviousValue=true \
+              ParameterKey=HostInstanceId,UsePreviousValue=true \
+              "ParameterKey=BackendImage,ParameterValue=$IMAGE_URI" 2>&1); then
+            printf '%s\n' "$result"
+            aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"
+          elif [[ "$result" == *"No updates are to be performed."* ]]; then
+            echo "Backend already uses this image digest and template; no restart needed."
+          else
+            printf '%s\n' "$result" >&2
+            exit 1
+          fi
+      - name: Smoke production API
+        run: |
+          curl --fail --silent --show-error \
+            https://api.gscores.tdat.io.vn/api/students/01000001 \
+            | jq -e '.data.sbd == "01000001"'
+          curl --fail --silent --show-error \
+            https://gscores.tdat.io.vn/api/students/01000001 \
+            | jq -e '.data.sbd == "01000001"'
+      - name: Record production deployment
+        run: |
+          printf '## ECS production\n\n- Stack: `%s`\n- Image: `%s`\n- CloudFormation update and API smoke succeeded.\n' \
+            "$STACK_NAME" "$IMAGE_URI" >> "$GITHUB_STEP_SUMMARY"
+      - name: Show stack events on failure
+        if: failure()
+        run: |
+          aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+            --query 'StackEvents[0:20].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+            --output table

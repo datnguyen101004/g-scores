@@ -1,0 +1,49 @@
+{
+  "barrierSeconds": 2.0,
+  "baseUrl": "https://gscores.tdat.io.vn",
+  "command": [
+    "k6",
+    "run",
+    "--no-usage-report",
+    "--log-format=raw",
+    "--new-machine-readable-summary=false",
+    "--env",
+    "BASE_URL=https://gscores.tdat.io.vn",
+    "--env",
+    "VUS=10",
+    "--env",
+    "BARRIER_SECONDS=2",
+    "--env",
+    "RUN_ID=20261007T045421.914Z",
+    "--env",
+    "SBD_FILE=/opt/g-scores-load-test/sbds.json",
+    "--env",
+    "SUMMARY_FILE=/opt/g-scores-load-test/results/nginx-4096-20261007T045122Z-smoke/summary.json",
+    "/opt/g-scores-load-test/lookup.js"
+  ],
+  "concurrencyNote": "VUs are requested; achieved concurrency is not guaranteed.",
+  "exitCode": 0,
+  "fileDescriptorLimit": {
+    "hard": 65535,
+    "required": 1034,
+    "softBefore": 65535,
+    "softForK6": 65535
+  },
+  "files": {
+    "generatorMetrics": "/opt/g-scores-load-test/results/nginx-4096-20261007T045122Z-smoke/generator-metrics.jsonl",
+    "requests": "/opt/g-scores-load-test/results/nginx-4096-20261007T045122Z-smoke/requests.csv",
+    "stdout": "/opt/g-scores-load-test/results/nginx-4096-20261007T045122Z-smoke/stdout.log",
+    "summary": "/opt/g-scores-load-test/results/nginx-4096-20261007T045122Z-smoke/summary.json"
+  },
+  "finishedAtUtc": "2026-10-07T04:54:24.231Z",
+  "launchError": null,
+  "requestRowsExtracted": 10,
+  "requestRowsMalformed": 0,
+  "requestedVus": 10,
+  "resultsDirectory": "/opt/g-scores-load-test/results/nginx-4096-20261007T045122Z-smoke",
+  "schemaVersion": "g-scores-lookup-burst/v1",
+  "startedAtUtc": "2026-10-07T04:54:21.914Z",
+  "status": "completed",
+  "summaryExists": true,
+  "vus": 10
+}

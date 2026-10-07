@@ -1,26 +1,19 @@
 # G-Scores Frontend
 
-Giao diện tra cứu và thống kê điểm thi THPT 2024, xây dựng bằng React, TypeScript, Vite và Tailwind CSS trên nền TailAdmin.
+Frontend của G-Scores, dùng React, TypeScript, Vite và Tailwind CSS.
 
 ## Demo
 
-**Trải nghiệm ứng dụng:** <https://gscores.tdat.io.vn>
+<https://gscores.tdat.io.vn>
 
-- [Tra cứu điểm](https://gscores.tdat.io.vn/)
-- [Tổng quan phổ điểm](https://gscores.tdat.io.vn/overview)
-- [Báo cáo và bảng xếp hạng](https://gscores.tdat.io.vn/report)
-
-Số báo danh mẫu để thử: **`01000001`**.
+Số báo danh mẫu: `01000001`.
 
 ## Tính năng
 
-- **Tra cứu điểm:** nhập số báo danh để xem điểm từng môn; giữ số `0` ở đầu. Môn không có điểm hiển thị `—`.
-- **Tổng quan:** chọn một trong chín môn để xem biểu đồ phổ điểm từ 0 đến 10, số thí sinh có điểm, điểm trung bình và trung vị.
-- **Báo cáo:** thống kê số thí sinh theo bốn mức điểm: `≥ 8`, `6 ≤ điểm < 8`, `4 ≤ điểm < 6`, `< 4`.
-- **Bảng xếp hạng khối A:** hiển thị top 10 theo tổng Toán, Vật lí, Hóa học, bao gồm thí sinh đồng hạng ở vị trí cuối.
-- **Tùy chỉnh giao diện:** hỗ trợ tiếng Việt/tiếng Anh và chế độ sáng/tối; lưu lựa chọn sau khi tải lại trang.
-- **Responsive:** sử dụng trên desktop, tablet và điện thoại.
-- Hiển thị trạng thái tải, dữ liệu rỗng và thông báo lỗi thân thiện; có thể thử lại khi kết nối hoặc hệ thống gặp sự cố.
+- Tra cứu điểm theo số báo danh.
+- Xem phổ điểm, điểm trung bình và trung vị theo môn.
+- Thống kê theo mức điểm và xem top 10 khối A, bao gồm thí sinh đồng hạng.
+- Hỗ trợ tiếng Việt/tiếng Anh, giao diện sáng/tối và màn hình mobile.
 
 ## Chạy local
 
@@ -57,9 +50,7 @@ Số báo danh mẫu để thử: **`01000001`**.
    npm run dev
    ```
 
-Mở **<http://localhost:5173>**. Dev server chỉ lắng nghe trên máy local.
-
-Frontend gọi API qua proxy Vite nên không cần cấu hình CORS cho luồng này. Nếu backend dùng cổng khác, sửa `API_PROXY_TARGET` và khởi động lại dev server.
+Mở <http://localhost:5173>. Các request `/api` được Vite chuyển tới backend. Nếu đổi cổng backend, cập nhật `API_PROXY_TARGET` rồi khởi động lại dev server.
 
 ## Build dự án
 
@@ -69,7 +60,7 @@ Chạy trong `frontend/`:
 npm run build
 ```
 
-Kết quả nằm trong thư mục `dist/`, có thể triển khai lên dịch vụ hosting tĩnh hỗ trợ SPA. Khi triển khai, cấu hình chuyển tiếp `/api/...` tới backend và phục vụ `index.html` cho các route `/overview`, `/report`.
+Output nằm trong `dist/`. Khi deploy, hosting cần chuyển tiếp `/api` tới backend và phục vụ `index.html` cho các route của ứng dụng.
 
 ## Chạy bằng Docker
 
@@ -89,9 +80,9 @@ Yêu cầu Docker Compose v2 và backend đang chạy trên host.
    docker compose --env-file .env.production up --build -d --wait
    ```
 
-Mở **<http://localhost:3000>**. Cấu hình này chỉ chạy frontend; backend và database được khởi động theo [hướng dẫn backend](../backend/README.md).
+Mở <http://localhost:3000>. Compose này chỉ chạy frontend; xem [README backend](../backend/README.md) để khởi động API và database.
 
-Nếu đổi cổng backend, cập nhật `DOCKER_API_PROXY_TARGET`. Dừng frontend bằng:
+Nếu backend dùng cổng khác, cập nhật `DOCKER_API_PROXY_TARGET`. Dừng frontend bằng:
 
 ```bash
 docker compose --env-file .env.production down
