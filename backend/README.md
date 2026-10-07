@@ -117,15 +117,15 @@ Mã mức điểm: `GTE_8`, `FROM_6_TO_8`, `FROM_4_TO_6`, `LT_4`.
 
 Có thể thử các API và xem cấu trúc response tại Swagger UI local. Xem [hướng dẫn frontend](../frontend/README.md) để chạy giao diện cùng backend.
 
-## CI và publish image lên ECR
+## CI/CD: publish ECR và deploy ECS production
 
 Workflow [`backend-image.yaml`](../.github/workflows/backend-image.yaml) chạy trên GitHub-hosted Ubuntu:
 
 - Pull request vào `development` hoặc `main`: chạy `mvnw verify` với Java 21 và Docker cho Testcontainers; không cấp quyền AWS.
-- Push thay đổi backend, dataset hoặc cấu hình CI/IAM vào `development`: kiểm thử thành công mới build/push image `linux/amd64` lên ECR `gscores-be`, region `ap-southeast-1`.
+- Push thay đổi backend, dataset hoặc cấu hình CI/IAM/ECS vào `development`: kiểm thử thành công → build/push image `linux/amd64` lên ECR `gscores-be` → deploy production ở region `ap-southeast-1`.
 - Có `workflow_dispatch`; để chạy từ giao diện Actions, workflow cần có trên nhánh mặc định `main`, rồi chọn nhánh `development`. Nhánh khác không publish.
 - Tag image: `sha-<commit>-run<run-id>-<attempt>`. Mỗi lần chạy/rerun có tag riêng vì ECR đang bật immutable tags; không dùng `latest`.
-- Tag và digest được ghi trong summary của job publish. **Pipeline chỉ build/push, không cập nhật ECS production.**
+- Job deploy dùng **digest vừa publish**, cập nhật stack `g-scores-app` từ [`ecs-app.yaml`](../infra/ecs-app.yaml), đợi CloudFormation hoàn tất và kiểm tra tra cứu SBD qua origin lẫn API public. Không cập nhật service trực tiếp ngoài CloudFormation.
 
 ### GitHub OIDC và IAM
 
@@ -136,6 +136,12 @@ Không lưu AWS access key trong GitHub Secrets. Job publish lấy OIDC token, a
 Stack [`github-actions-ecr.yaml`](../infra/github-actions-ecr.yaml) tạo OIDC provider và role. Trust policy chỉ chấp nhận audience `sts.amazonaws.com` và subject chính xác của nhánh `development` trong repository này. Repository dùng immutable subject có owner/repository IDs; không thay bằng subject chỉ có tên repository.
 
 Role được login ECR và đọc/upload layer, push manifest vào **duy nhất** repository `gscores-be`. Không được tạo/xóa repository, deploy ECS hoặc đọc Secrets Manager.
+
+Job deploy dùng role OIDC riêng `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy`: chỉ cập nhật/đọc stack `g-scores-app` và pass role `g-scores-production-cloudformation-deploy` cho CloudFormation. Role CloudFormation chỉ đăng ký task definition, quản lý revision trong task family production, cập nhật service hiện có và pass execution role hiện có cho ECS; không có quyền sửa database volume, IAM hay đọc secrets.
+
+**Có gián đoạn khi deploy:** PostgreSQL, Redis và backend nằm chung task, service có một replica với `MinimumHealthyPercent=0`/`MaximumPercent=100`. Task cũ dừng trước khi task mới chạy; volume PostgreSQL được giữ lại, Redis cache khởi tạo lại. ECS deployment circuit breaker bật rollback. Nếu deploy thất bại, workflow in stack events; kiểm tra stack đã rollback và API đã phục hồi trước lượt tiếp theo. Pipeline không tự rollback lỗi smoke sau một stack update đã thành công.
+
+Nginx host không nằm trong ECS task và không được job này deploy tự động. Cấu hình [`infra/nginx.conf`](../infra/nginx.conf) được đồng bộ riêng lên `/etc/nginx/nginx.conf`, kiểm tra bằng `nginx -t` rồi reload; giữ `worker_connections 4096`. Xem [so sánh worker_connections](../k6/README.md#4-điều-chỉnh-nginx-worker_connections).
 
 Áp dụng/cập nhật stack từ root repository bằng AWS credentials quản trị hạ tầng:
 
@@ -156,5 +162,8 @@ Các **repository variables** đã cấu hình trong GitHub → Settings → Sec
 | `AWS_REGION` | `ap-southeast-1` |
 | `AWS_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-github-backend-ecr-push` |
 | `ECR_REPOSITORY_URI` | `329539068073.dkr.ecr.ap-southeast-1.amazonaws.com/gscores-be` |
+| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy` |
+| `CLOUDFORMATION_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-production-cloudformation-deploy` |
+| `ECS_STACK_NAME` | `g-scores-app` |
 
-Các giá trị này không phải secrets. Nếu đổi nhánh publish, cập nhật đồng thời workflow và parameter `GitHubBranch` của stack. Giới hạn người được push/merge vào `development`: code trên nhánh này được phép sử dụng role push image. Các Actions được pin bằng commit SHA.
+Các giá trị này không phải secrets. Nếu đổi nhánh publish/deploy, cập nhật đồng thời workflow và parameter `GitHubBranch` của stack. Giới hạn người được push/merge vào `development`: code trên nhánh này được phép publish image và deploy production. Các Actions được pin bằng commit SHA. Task family cố định giúp cập nhật image trong đúng phạm vi IAM; thay đổi tài nguyên hạ tầng khác cần credentials quản trị, không mở rộng role CI thành admin.

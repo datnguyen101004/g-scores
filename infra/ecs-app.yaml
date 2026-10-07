@@ -7,6 +7,10 @@ Parameters:
   BackendImage:
     Type: String
     Description: Immutable ECR runtime image URI including tag or digest.
+  TaskFamily:
+    Type: String
+    Default: g-scores-app-TaskDefinition-PrT3TvNO1ydM
+    Description: Keep a stable task family across image updates.
 
 Resources:
   DatabaseSecret:
@@ -60,6 +64,7 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
+      Family: !Ref TaskFamily
       RequiresCompatibilities:
         - EC2
       NetworkMode: bridge

@@ -1,0 +1,35 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /opt/g-scores-load-test/lookup.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 10 max VUs, 31m30s max duration (incl. graceful stop):
+              * lookup: 1 iterations for each of 10 VUs (maxDuration: 30m0s, gracefulStop: 1m30s)
+
+
+running (00m01.0s), 10/10 VUs, 0 complete and 0 interrupted iterations
+lookup   [   0% ] 10 VUs  00m01.0s/30m0s  00/10 iters, 1 per VU
+
+running (00m02.0s), 10/10 VUs, 0 complete and 0 interrupted iterations
+lookup   [   0% ] 10 VUs  00m02.0s/30m0s  00/10 iters, 1 per VU
+BURST_REQUEST,vu-6,01000536,1791347336714,1791347336892,200,true,false,
+BURST_REQUEST,vu-2,01000107,1791347336715,1791347336914,200,true,false,
+BURST_REQUEST,vu-5,01000427,1791347336713,1791347336923,200,true,false,
+BURST_REQUEST,vu-3,01000215,1791347336713,1791347336929,200,true,false,
+BURST_REQUEST,vu-10,01000966,1791347336715,1791347336935,200,true,false,
+BURST_REQUEST,vu-1,01000001,1791347336713,1791347336940,200,true,false,
+BURST_REQUEST,vu-9,01000858,1791347336713,1791347336941,200,true,false,
+BURST_REQUEST,vu-7,01000642,1791347336715,1791347336944,200,true,false,
+BURST_REQUEST,vu-4,01000321,1791347336714,1791347336949,200,true,false,
+BURST_REQUEST,vu-8,01000752,1791347336713,1791347336957,200,true,false,
+lookup complete: p95=146.85ms errors=0.00% cache_hit=0.00% summary=/opt/g-scores-load-test/results/nginx-2048-20261007T042516Z-smoke/summary.json
+
+running (00m02.2s), 00/10 VUs, 10 complete and 0 interrupted iterations
+lookup ✓ [ 100% ] 10 VUs  00m02.2s/30m0s  10/10 iters, 1 per VU

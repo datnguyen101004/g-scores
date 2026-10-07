@@ -1,0 +1,36 @@
+{
+  "CommandId": "31624e5f-c7c0-4020-a5d8-7b40ab831701",
+  "InstanceId": "i-0d6d2c1f77ad58573",
+  "Comment": "",
+  "DocumentName": "AWS-RunShellScript",
+  "DocumentVersion": "$DEFAULT",
+  "PluginName": "aws:runShellScript",
+  "ResponseCode": 0,
+  "ExecutionStartDateTime": "2026-10-07T04:29:30.265Z",
+  "ExecutionElapsedTime": "PT54.51S",
+  "ExecutionEndDateTime": "2026-10-07T04:30:24.265Z",
+  "Status": "Success",
+  "StatusDetails": "Success",
+  "StandardOutputContent": "2026-10-07T04:29:30.293Z results=/opt/g-scores-load-test/results/nginx-2048-20261007T042516Z\n2026-10-07T04:29:30.293Z requested vus=10000; achieved concurrency is not guaranteed; barrier=20s\n2026-10-07T04:30:24.769Z burst finished exit=0 request_rows=10000 malformed_rows=0 summary=/opt/g-scores-load-test/results/nginx-2048-20261007T042516Z/summary.json\n",
+  "StandardOutputUrl": "",
+  "StandardErrorContent": "",
+  "StandardErrorUrl": "",
+  "CloudWatchOutputConfig": {
+    "CloudWatchLogGroupName": "",
+    "CloudWatchOutputEnabled": false
+  },
+  "ResponseMetadata": {
+    "RequestId": "061c7bf6-1ac1-491e-bd1c-2d1377aceb32",
+    "HTTPStatusCode": 200,
+    "HTTPHeaders": {
+      "server": "Server",
+      "date": "Wed, 07 Oct 2026 04:30:26 GMT",
+      "content-type": "application/x-amz-json-1.1",
+      "content-length": "940",
+      "connection": "keep-alive",
+      "x-amzn-requestid": "061c7bf6-1ac1-491e-bd1c-2d1377aceb32",
+      "cache-control": "no-store"
+    },
+    "RetryAttempts": 0
+  }
+}

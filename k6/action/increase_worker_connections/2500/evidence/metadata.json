@@ -1,0 +1,124 @@
+{
+  "run": "nginx-2500-20261007T044003Z",
+  "workerConnections": 2500,
+  "target": "https://gscores.tdat.io.vn",
+  "capturedAtUtc": "2026-10-07T04:40:06.782Z",
+  "cpuCreditBefore": {
+    "Label": "CPUCreditBalance",
+    "Datapoints": [
+      {
+        "Timestamp": "2026-10-07T11:20:00+07:00",
+        "Average": 281.2099953,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:25:00+07:00",
+        "Average": 282.96481206666664,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:30:00+07:00",
+        "Average": 284.09748706666664,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T11:35:00+07:00",
+        "Average": 285.5832034333333,
+        "Unit": "Count"
+      }
+    ]
+  },
+  "nginxLogOffsets": {
+    "errorLogBytes": 597212,
+    "accessLogBytes": 65784385
+  },
+  "generatorDuring": [
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.4xlarge",
+      "state": "running"
+    }
+  ],
+  "method": {
+    "vus": 10000,
+    "iterationsPerVu": 1,
+    "barrierSeconds": 20,
+    "requestTimeoutSeconds": 60,
+    "retries": 0,
+    "subjects": "10000 unique SBDs same fixture",
+    "baseline1024": "2026-10-06T17:26:11.946Z",
+    "baseline2048": "2026-10-07T04:29:51.015Z",
+    "limits": "Single run each; different warm state, CPU credits,network and cache; observed changes not sole causality proof"
+  },
+  "nginxDiagnostics": {
+    "errorRows": 17,
+    "workerConnectionLimitErrors": 17,
+    "burstAccessRows": 8411,
+    "burstAccessStatuses": {
+      "200": 8411
+    },
+    "errorExamples": [
+      "2026/10/07 04:43:47 [warn] 309587#309587: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:48 [warn] 309587#309587: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:48 [warn] 309586#309586: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:49 [warn] 309587#309587: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:49 [warn] 309586#309586: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:50 [warn] 309586#309586: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:50 [warn] 309587#309587: 2500 worker_connections are not enough, reusing connections",
+      "2026/10/07 04:43:51 [warn] 309586#309586: 2500 worker_connections are not enough, reusing connections"
+    ]
+  },
+  "originRecovery": {
+    "timestampUtc": "2026-10-07T04:44:38.471Z",
+    "status": 200,
+    "correct": true
+  },
+  "recovery": {
+    "timestampUtc": "2026-10-07T04:44:38.471Z",
+    "origin": {
+      "status": 200,
+      "correct": true
+    }
+  },
+  "finalRecovery": {
+    "timestampUtc": "2026-10-07T04:47:09Z",
+    "publicStatus": 200,
+    "publicCorrect": true
+  },
+  "publicRecoveryChecks": {
+    "attempts": [
+      [
+        "04:44:38",
+        429
+      ],
+      [
+        "04:45:09",
+        429
+      ],
+      [
+        "04:45:39",
+        429
+      ],
+      [
+        "04:46:09",
+        429
+      ],
+      [
+        "04:46:39",
+        429
+      ],
+      [
+        "04:47:09",
+        200
+      ]
+    ],
+    "recovered": true
+  },
+  "generatorAfter": [
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.large",
+      "state": "stopped"
+    }
+  ]
+}

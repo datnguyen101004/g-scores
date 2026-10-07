@@ -1,0 +1,13 @@
+period,table,counter,delta
+baselineToLastDuringBurst,public.exam_scores,seq_scan,0
+baselineToLastDuringBurst,public.exam_scores,idx_scan,9222
+baselineToLastDuringBurst,public.exam_scores,seq_tup_read,0
+baselineToLastDuringBurst,public.exam_scores,idx_tup_fetch,9222
+firstToLastDuringBurst,public.exam_scores,seq_scan,0
+firstToLastDuringBurst,public.exam_scores,idx_scan,8436
+firstToLastDuringBurst,public.exam_scores,seq_tup_read,0
+firstToLastDuringBurst,public.exam_scores,idx_tup_fetch,8436
+baselineToRecovery,public.exam_scores,seq_scan,0
+baselineToRecovery,public.exam_scores,idx_scan,9223
+baselineToRecovery,public.exam_scores,seq_tup_read,0
+baselineToRecovery,public.exam_scores,idx_tup_fetch,9223
