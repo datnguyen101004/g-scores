@@ -132,15 +132,25 @@ jobs:
           role-duration-seconds: 3600
           allowed-account-ids: '329539068073'
       - name: Update production stack with published digest
+        shell: bash
         run: |
-          aws cloudformation update-stack \
+          if result=$(aws cloudformation update-stack \
             --stack-name "$STACK_NAME" \
             --template-body file://infra/ecs-app.yaml \
             --role-arn "$CLOUDFORMATION_ROLE_ARN" \
             --capabilities CAPABILITY_IAM \
             --parameters ParameterKey=ClusterName,UsePreviousValue=true \
-              "ParameterKey=BackendImage,ParameterValue=$IMAGE_URI"
-          aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"
+              ParameterKey=TaskFamily,UsePreviousValue=true \
+              ParameterKey=HostInstanceId,UsePreviousValue=true \
+              "ParameterKey=BackendImage,ParameterValue=$IMAGE_URI" 2>&1); then
+            printf '%s\n' "$result"
+            aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"
+          elif [[ "$result" == *"No updates are to be performed."* ]]; then
+            echo "Backend already uses this image digest and template; no restart needed."
+          else
+            printf '%s\n' "$result" >&2
+            exit 1
+          fi
       - name: Smoke production API
         run: |
           curl --fail --silent --show-error \

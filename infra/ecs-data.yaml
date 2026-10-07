@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Independent PostgreSQL and Redis services on the existing G-Scores EC2 data host; not deployed by backend CI.
+
+Parameters:
+  ClusterName:
+    Type: String
+  HostInstanceId:
+    Type: AWS::EC2::Instance::Id
+    Default: i-0ca15f1d1e04c71f4
+  DatabaseSecretArn:
+    Type: String
+    Description: Existing DatabaseSecretArn output of g-scores-app; do not rotate during migration.
+  RedisSecretArn:
+    Type: String
+    Description: Existing RedisSecretArn output of g-scores-app.
+  PostgresImage:
+    Type: String
+    Default: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+  RedisImage:
+    Type: String
+    Default: redis@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      Policies:
+        - PolicyName: ReadExistingDataCredentials
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecretArn
+                  - !Ref RedisSecretArn
+
+  PostgresTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: g-scores-postgres
+      RequiresCompatibilities: [EC2]
+      NetworkMode: host
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      Volumes:
+        - Name: postgres-data
+          DockerVolumeConfiguration:
+            Scope: shared
+            Autoprovision: false
+            Driver: local
+      ContainerDefinitions:
+        - Name: postgres
+          Image: !Ref PostgresImage
+          Essential: true
+          Cpu: 512
+          Memory: 768
+          Command: [postgres, '-c', 'listen_addresses=127.0.0.1']
+          Environment:
+            - Name: POSTGRES_DB
+              Value: g_scores
+            - Name: POSTGRES_USER
+              Value: g_scores
+          Secrets:
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub '${DatabaseSecretArn}:password::'
+          MountPoints:
+            - SourceVolume: postgres-data
+              ContainerPath: /var/lib/postgresql/data
+          PortMappings:
+            - ContainerPort: 5432
+              HostPort: 5432
+              Protocol: tcp
+          HealthCheck:
+            Command: [CMD-SHELL, 'pg_isready -U g_scores -d g_scores -h 127.0.0.1']
+            Interval: 10
+            Timeout: 5
+            Retries: 5
+            StartPeriod: 30
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: postgres
+
+  RedisTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: g-scores-redis
+      RequiresCompatibilities: [EC2]
+      NetworkMode: host
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: redis
+          Image: !Ref RedisImage
+          Essential: true
+          Cpu: 128
+          Memory: 128
+          Command:
+            - sh
+            - -c
+            - exec redis-server --bind 127.0.0.1 --save '' --appendonly no --maxmemory 64mb --maxmemory-policy allkeys-lru --requirepass "$REDIS_PASSWORD"
+          Secrets:
+            - Name: REDIS_PASSWORD
+              ValueFrom: !Ref RedisSecretArn
+          PortMappings:
+            - ContainerPort: 6379
+              HostPort: 6379
+              Protocol: tcp
+          HealthCheck:
+            Command: [CMD-SHELL, 'test "$(REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli -h 127.0.0.1 ping)" = PONG']
+            Interval: 10
+            Timeout: 5
+            Retries: 5
+            StartPeriod: 10
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: redis
+
+  PostgresService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: g-scores-postgres
+      Cluster: !Ref ClusterName
+      LaunchType: EC2
+      DesiredCount: 1
+      TaskDefinition: !Ref PostgresTaskDefinition
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: !Sub "ec2InstanceId == '${HostInstanceId}'"
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+
+  RedisService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: g-scores-redis
+      Cluster: !Ref ClusterName
+      LaunchType: EC2
+      DesiredCount: 1
+      TaskDefinition: !Ref RedisTaskDefinition
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: !Sub "ec2InstanceId == '${HostInstanceId}'"
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+
+Outputs:
+  PostgresServiceName:
+    Value: !GetAtt PostgresService.Name
+  RedisServiceName:
+    Value: !GetAtt RedisService.Name
+  PostgresEndpoint:
+    Value: 127.0.0.1:5432
+  RedisEndpoint:
+    Value: 127.0.0.1:6379

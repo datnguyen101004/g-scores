@@ -125,7 +125,7 @@ Workflow [`backend-image.yaml`](../.github/workflows/backend-image.yaml) chạy 
 - Push thay đổi backend, dataset hoặc cấu hình CI/IAM/ECS vào `development`: kiểm thử thành công → build/push image `linux/amd64` lên ECR `gscores-be` → deploy production ở region `ap-southeast-1`.
 - Có `workflow_dispatch`; để chạy từ giao diện Actions, workflow cần có trên nhánh mặc định `main`, rồi chọn nhánh `development`. Nhánh khác không publish.
 - Tag image: `sha-<commit>-run<run-id>-<attempt>`. Mỗi lần chạy/rerun có tag riêng vì ECR đang bật immutable tags; không dùng `latest`.
-- Job deploy dùng **digest vừa publish**, cập nhật stack `g-scores-app` từ [`ecs-app.yaml`](../infra/ecs-app.yaml), đợi CloudFormation hoàn tất và kiểm tra tra cứu SBD qua origin lẫn API public. Không cập nhật service trực tiếp ngoài CloudFormation.
+- Job deploy dùng **digest vừa publish**, chỉ cập nhật stack backend `g-scores-app` từ [`ecs-app.yaml`](../infra/ecs-app.yaml), đợi CloudFormation hoàn tất và kiểm tra tra cứu SBD qua origin lẫn API public. Giữ nguyên cluster, task family và host instance hiện có. Nếu digest/template không đổi, deploy là no-op, không restart task.
 
 ### GitHub OIDC và IAM
 
@@ -139,11 +139,35 @@ Role được login ECR và đọc/upload layer, push manifest vào **duy nhất
 
 Job deploy dùng role OIDC riêng `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy`: chỉ cập nhật/đọc stack `g-scores-app` và pass role `g-scores-production-cloudformation-deploy` cho CloudFormation. Role CloudFormation chỉ đăng ký task definition, quản lý revision trong task family production, cập nhật service hiện có và đọc/pass execution role hiện có cho ECS; không có quyền sửa database volume, IAM hay đọc secrets. `iam:GetRole` trên đúng execution role cần thiết để CloudFormation resolve thuộc tính ARN.
 
-**Có gián đoạn khi deploy:** PostgreSQL, Redis và backend nằm chung task, service có một replica với `MinimumHealthyPercent=0`/`MaximumPercent=100`. Task cũ dừng trước khi task mới chạy; volume PostgreSQL được giữ lại, Redis cache khởi tạo lại. ECS deployment circuit breaker bật rollback. Nếu deploy thất bại, workflow in stack events; kiểm tra stack đã rollback và API đã phục hồi trước lượt tiếp theo. Pipeline không tự rollback lỗi smoke sau một stack update đã thành công.
+**Chỉ backend gián đoạn khi deploy:** service có một replica với `MinimumHealthyPercent=0`/`MaximumPercent=100`, nên task backend cũ dừng trước khi task mới chạy. PostgreSQL và Redis nằm ở các service/stack riêng, không bị pipeline backend dừng hoặc cập nhật; Redis cache không bị mất do restart backend. ECS deployment circuit breaker bật rollback. Nếu deploy thất bại, workflow in stack events; kiểm tra stack đã rollback và API đã phục hồi trước lượt tiếp theo. Pipeline không tự rollback lỗi smoke sau một stack update đã thành công.
 
 Nginx host không nằm trong ECS task và không được job này deploy tự động. Cấu hình [`infra/nginx.conf`](../infra/nginx.conf) được đồng bộ riêng lên `/etc/nginx/nginx.conf`, kiểm tra bằng `nginx -t` rồi reload; giữ `worker_connections 4096`. Xem [so sánh worker_connections](../k6/README.md#4-điều-chỉnh-nginx-worker_connections).
 
-Đã kiểm chứng end-to-end ngày **07/10/2026**: [GitHub Actions run 37576843140](https://github.com/datnguyen101004/g-scores/actions/runs/37576843140) hoàn tất verify → publish → deploy; stack `UPDATE_COMPLETE`, task family production revision `2`, cả ba container healthy. Database giữ **1.061.605 thí sinh**; tra cứu SBD, top 10 và phổ điểm trả HTTP 200 qua cả origin và API public. Nginx production khớp file cấu hình trong repo. Đây là kết quả của lượt deploy này, không phải cam kết zero-downtime.
+### Cấu trúc ECS production
+
+| Stack / service | Trách nhiệm | Endpoint trên host |
+|---|---|---|
+| `g-scores-app` / service backend hiện có | Chỉ chạy backend; CI/CD cập nhật image | `127.0.0.1:8080` |
+| `g-scores-data` / `g-scores-postgres` | PostgreSQL độc lập, giữ volume `postgres-data` | `127.0.0.1:5432` |
+| `g-scores-data` / `g-scores-redis` | Redis độc lập, giữ cache giữa các lượt deploy backend | `127.0.0.1:6379` |
+
+Cả ba service dùng host networking, được pin vào EC2 `i-0ca15f1d1e04c71f4` bằng placement constraint. PostgreSQL, Redis và backend chỉ bind loopback; Nginx tiếp tục proxy vào localhost. Không dùng Docker `Links` hoặc phụ thuộc container giữa các task.
+
+[`ecs-data.yaml`](../infra/ecs-data.yaml) pin image PostgreSQL/Redis bằng digest, dùng credentials hiện có từ Secrets Manager. Volume PostgreSQL có `Autoprovision=false`: task phải dùng volume đã tồn tại, không âm thầm tạo database mới. Secrets vẫn thuộc stack `g-scores-app` và được retain; không xóa/rotate chúng độc lập khi các service data đang sử dụng.
+
+Stack data không thuộc pipeline backend, và role CI không được cập nhật stack/service data. Khi cần đổi cấu hình PostgreSQL/Redis, dùng AWS credentials quản trị để cập nhật riêng:
+
+```bash
+aws cloudformation deploy --template-file infra/ecs-data.yaml --stack-name g-scores-data --capabilities CAPABILITY_IAM --region ap-southeast-1 --parameter-overrides \
+  ClusterName=g-scores-ecs-EcsCluster-RA8qSZM9ePV1 \
+  DatabaseSecretArn=arn:aws:secretsmanager:ap-southeast-1:329539068073:secret:DatabaseSecret-CyFsJatIOkQH-iVfDOw \
+  RedisSecretArn=arn:aws:secretsmanager:ap-southeast-1:329539068073:secret:RedisSecret-SFlHA7EJmyfL-83JyPm \
+  --no-fail-on-empty-changeset
+```
+
+Volume và backup hiện nằm trên EC2/EBS, không phải database HA. Khi đổi host, cần chuyển/restore volume trước và cập nhật `HostInstanceId` của cả hai stack. Không chạy hai PostgreSQL trên cùng volume. Không scale backend sang host khác khi vẫn dùng endpoint loopback.
+
+Cutover ngày **07/10/2026** đã dùng lại đúng volume `postgres-data` và xác nhận **1.061.605 thí sinh** trước khi bật backend độc lập. Backup PostgreSQL custom-format trước cutover nằm tại `/var/backups/g-scores/before-ecs-split-20261007T055729Z.dump` trên EC2; đã kiểm tra archive có dữ liệu bảng `exam_scores`. Backup này cũng nằm trên host, không thay thế backup off-host.
 
 Áp dụng/cập nhật stack từ root repository bằng AWS credentials quản trị hạ tầng:
 
