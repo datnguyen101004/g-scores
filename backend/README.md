@@ -174,10 +174,11 @@ Workflow: [`.github/workflows/backend-image.yaml`](../.github/workflows/backend-
 
 | Sự kiện | Các bước chạy |
 |---|---|
-| Pull request vào `development` hoặc `main` | Kiểm tra backend bằng Maven |
+| Pull request vào `development` | Kiểm tra backend bằng Maven |
 | Push vào `development` | Kiểm tra → build và push image lên ECR → deploy ECS production → smoke API |
 | Chạy thủ công trên nhánh `development` | Cùng luồng build và deploy như push |
 | Chạy thủ công trên nhánh khác | Chỉ kiểm tra backend |
+| Push hoặc pull request vào `main` | Không tự chạy workflow |
 
 Với push và pull request, workflow chỉ chạy khi thay đổi `backend/`, `dataset/`, chính workflow hoặc hai template `infra/github-actions-ecr.yaml` và `infra/ecs-app.yaml`.
 
@@ -189,6 +190,8 @@ Với push và pull request, workflow chỉ chạy khi thay đổi `backend/`, `
 4. **Smoke:** gọi API tra cứu `01000001` qua cả domain API và domain ứng dụng, kiểm tra trường `data.sbd` trong response.
 
 **Push vào `development` có thể triển khai thẳng lên production**, không chỉ build image. Pull request không publish hay deploy.
+
+Cancel GitHub Actions không tự rollback AWS: CloudFormation/ECS có thể tiếp tục deployment đã được gửi. Nếu stack đang `UPDATE_IN_PROGRESS`, có thể dùng `cancel-update-stack` để yêu cầu rollback; nếu update đã hoàn tất, cần deploy lại image/template trước đó. Smoke thất bại cũng không tự rollback. Rollback deployment không hoàn tác dữ liệu hoặc database migrations.
 
 ### Cấu hình GitHub Actions
 

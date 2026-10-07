@@ -1,206 +1,58 @@
-# G-Scores — kiểm thử tải bằng k6
+# Kiểm thử tải
 
-Kiểm tra một burst **10.000 request tra cứu SBD** và ghi nhận tài nguyên backend, PostgreSQL và EC2. Mỗi VU gửi một request với SBD khác nhau, không retry; các VU đợi thời điểm bắt đầu chung.
+## Cấu hình
 
-## 1. Cấu hình cần thiết
+- API: `GET /api/students/{sbd}`, không dùng Redis cache.
+- Backend: 1 ECS task, CPU reservation 1.024 units, RAM 2 GiB. Nginx, PostgreSQL và Redis cùng host EC2.
+- Máy phát tải: `c7i.large`, k6 2.3.0.
+- Mỗi lượt: 2 phút tăng tải từ 100 RPS, 10 phút giữ mức mục tiêu, 2 phút giảm về 0.
 
-### Máy chạy tải
+## Kết quả
 
-- Linux, Python 3.9+ và k6. Phiên bản đã sử dụng: **k6 2.3.0**.
-- Chạy trên máy riêng, không dùng chung máy với backend.
-- Lượt 10.000 VU đã dùng **16 vCPU / 32 GiB RAM**; k6 sử dụng khoảng **3,63 GiB RAM**. Không nên dùng máy 4 GiB cho lượt này.
-- Giới hạn file descriptors ít nhất `VUs + 1024`; lượt đo dùng `65535`.
-- Đồng bộ đồng hồ máy chạy tải và backend để đối chiếu telemetry.
+Số liệu trong 10 phút giữ tải, đo ngày 07/10/2026.
 
-### Máy backend và công cụ local
+| Chỉ số | 500 RPS | 1.000 RPS | 2.000 RPS |
+|---|---:|---:|---:|
+| Throughput thành công | 499,997 RPS | 999,07 RPS | 1.989,87 RPS |
+| p95 latency (k6) | 2,73 ms | 6,34 ms | 1.184,88 ms |
+| p99 latency (k6) | 10,05 ms | 24,05 ms | 3.232,43 ms |
+| Error rate | 0% | 0% | 0,218% |
+| Dropped iterations | 0 | 556 | 3.119 |
+| EC2 CPU trung bình (CloudWatch) | 35,0% | 56,7% | 98,5%* |
+| EC2 RAM sử dụng trung bình | 25,3% | 26,9% | 28,6% |
+| Network vào / ra trung bình | 0,73 / 1,52 Mbps | 1,53 / 3,04 Mbps | 3,04 / 6,91 Mbps |
+| Backend CPU trung bình (ECS) | 28,7% | 50,8% | 96,3% |
+| Backend RAM trung bình | 461 MiB | 476 MiB | 534 MiB |
+| PostgreSQL CPU trung bình (ECS) | 25,8% | 46,0% | 87,1% |
+| PostgreSQL connections | 10 | 10 | 10 |
 
-- Backend có Docker và PostgreSQL container để `monitor.py` thu số liệu; sampler hiện dùng database/user `g_scores` và nhãn container ECS.
-- Nếu dùng AWS SSM: các EC2 cần SSM Agent, instance role và kết nối SSM hoạt động. Máy local cần AWS CLI, Python, `boto3` và AWS credentials có quyền SSM/EC2 tương ứng.
-- `ec2.yaml` cung cấp template máy phát tải trên AWS nếu cần tạo hạ tầng riêng.
+CPU ECS tính theo reservation; CPU EC2 tính trên toàn host.
 
-### Tham số bài đo
+*EC2 CPU ở lượt 2.000 RPS có một bucket CloudWatch 5 phút lúc đối chiếu; sampler 5 giây trên toàn cửa sổ ghi nhận trung bình 98,8%, cao nhất 100%.
 
-| Cấu hình | Giá trị |
-|---|---|
-| API đích | `https://gscores.tdat.io.vn/api/students/{sbd}` |
-| Số VU / request | `10000`, mỗi VU một request |
-| Dataset | `sbds.json`: 10.000 SBD khác nhau, giữ số `0` đầu |
-| Thời gian đợi bắt đầu chung | `20` giây |
-| Timeout mỗi request | `60` giây |
-| Cache | Nonce riêng, `Cache-Control: no-cache`; vẫn ghi nhận cache hit thực tế |
-| Telemetry backend | Yêu cầu chu kỳ `1` giây; khoảng thực tế có thể dài hơn |
+Lượt 2.000 RPS dùng một scenario liên tục; hai lượt trước dùng scenario riêng cho từng giai đoạn.
 
-**Lưu ý:** lượt tải có thể gây chậm hoặc lỗi production. Chỉ chạy trên hệ thống được phép kiểm thử và không chạy nhiều burst cùng lúc.
+## Nhận xét
 
-## 2. Hướng dẫn chạy qua AWS SSM
+- **500 RPS:** duy trì đủ tải, không lỗi và không dropped iterations.
+- **1.000 RPS:** phục vụ khoảng 999 RPS, không lỗi. Có 556 lượt k6 không khởi chạy được khi chuyển sang giai đoạn giữ tải; chín phút sau duy trì khoảng 1.000 RPS. Chưa xác định nguyên nhân drops.
+- **2.000 RPS:** CPU host gần bão hòa, p95/p99 vượt ngưỡng 500 ms / 1 giây; có 2.611 request lỗi và 3.119 dropped iterations. Không đạt mức tải ổn định theo ngưỡng kiểm tra.
+- Backend giữ nguyên một task và healthy sau cả ba lượt; API sau test hoạt động bình thường.
+- CPU credits giảm trong lúc đo. Kết quả chỉ xác nhận cửa sổ 10 phút, chưa chứng minh tải dài hạn.
 
-Các lệnh dưới đây dùng **PowerShell**, thực hiện từ root repository. Thay ID instance bằng máy của bạn; không khởi động backend/database lại chỉ để chạy test.
+## Thử nâng EC2 — 2.000 RPS
 
-### Chuẩn bị
+Tạm nâng `t3.medium` lên `t3.xlarge` (4 vCPU, 16 GiB), không tăng số backend task hoặc quota task.
 
-```powershell
-python -m pip install boto3
-$env:AWS_DEFAULT_REGION = "ap-southeast-1"
-$generator = "<generator-instance-id>"
-$backend = "<backend-instance-id>"
-$baseUrl = "https://gscores.tdat.io.vn"
-$run = "burst-$(Get-Date -Format yyyyMMdd-HHmmss)"
-
-aws ec2 start-instances --instance-ids $generator
-aws ec2 wait instance-status-ok --instance-ids $generator
-python k6/ssm.py --instance $generator run --timeout 60 --command "k6 version && free -m && ulimit -n"
-python k6/ssm.py --instance $generator upload k6/lookup.js k6/run.py k6/sbds.json
-python k6/ssm.py --instance $backend upload k6/monitor.py
-```
-
-Đảm bảo máy phát đủ tài nguyên **trước khi chạy**. Khởi động instance không tự tăng cấu hình máy. `ssm.py` mặc định dùng region `ap-southeast-1`; với region khác, truyền `--region` trước subcommand.
-
-### Chạy thử nhỏ
-
-```powershell
-python k6/ssm.py --instance $generator run --timeout 120 --command "python3 -u /opt/g-scores-load-test/run.py --base-url $baseUrl --vus 10 --barrier-seconds 2 --output-dir /opt/g-scores-load-test/results/$run-smoke"
-```
-
-Kiểm tra summary và response của smoke trước khi chạy 10.000 VU. Exit code `0` chỉ chứng minh chương trình chạy xong, không chứng minh tất cả request thành công.
-
-### Thu telemetry và chạy burst
-
-**Terminal 1:** đặt `$backend`, `$run` giống terminal chuẩn bị, rồi bắt đầu sampler:
-
-```powershell
-python k6/ssm.py --instance $backend run --timeout 720 --command "python3 /opt/g-scores-load-test/monitor.py --duration 600 --interval 1 --output /opt/g-scores-load-test/results/$run-backend.jsonl"
-```
-
-Đợi sampler tạo file và ghi vài mẫu baseline trước khi chạy tải. Sampler chỉ đọc tài nguyên và thống kê PostgreSQL, không sửa dữ liệu hoặc reset counters.
-
-**Terminal 2:** dùng các biến của terminal chuẩn bị, chạy burst:
-
-```powershell
-python k6/ssm.py --instance $generator run --timeout 2100 --command "python3 -u /opt/g-scores-load-test/run.py --base-url $baseUrl --vus 10000 --barrier-seconds 20 --output-dir /opt/g-scores-load-test/results/$run"
-```
-
-Runner không ghi đè thư mục đã tồn tại. Mỗi lần chạy dùng một tên `$run` mới và một bộ telemetry riêng.
-
-### Download dữ liệu và tạo report
-
-Sau khi burst và sampler hoàn tất:
-
-```powershell
-python k6/ssm.py --instance $generator run --timeout 60 --command "tar -czf /opt/g-scores-load-test/$run.tar.gz -C /opt/g-scores-load-test/results $run"
-python k6/ssm.py --instance $generator download --remote "/opt/g-scores-load-test/$run.tar.gz" --local "k6/results/$run.tar.gz"
-tar -xzf "k6/results/$run.tar.gz" -C k6/results
-python k6/ssm.py --instance $backend download --remote "/opt/g-scores-load-test/results/$run-backend.jsonl" --local "k6/results/$run-backend.jsonl"
-python k6/report.py --results "k6/results/$run" --telemetry "k6/results/$run-backend.jsonl" --output "k6/reports/$run"
-```
-
-Report gồm HTML, Markdown, JSON và CSV. Có thể thêm `--metadata <file.json>` nếu đã thu cấu hình AWS, log gateway hoặc kết quả kiểm tra phục hồi. Không dùng metadata của lượt cũ cho lượt mới.
-
-### Kết thúc
-
-Kiểm tra API phục hồi và lưu dữ liệu về local, sau đó dừng **máy phát tải**, không dừng backend:
-
-```powershell
-aws ec2 stop-instances --instance-ids $generator
-aws ec2 wait instance-stopped --instance-ids $generator
-```
-
-EC2 stopped không tính phí compute nhưng **EBS vẫn tính phí**. Nếu đã tăng instance type để kiểm thử, trả về cấu hình cũ; thao tác đổi cấu hình có thể khởi động máy lại nên cần kiểm tra trạng thái cuối cùng.
-
-## 3. Báo cáo baseline — worker_connections 1024
-
-**Lượt đo ngày 06/10/2026 (UTC)** qua API public, backend release `0.0.4`, Nginx hai worker với `worker_connections 1024`:
-
-- Backend EC2: `t3.medium`, **2 vCPU / 4 GiB**, CPU credits `standard`.
-- Backend/PostgreSQL/Redis dùng chung host; giới hạn RAM container lần lượt **2 GiB / 768 MiB / 128 MiB**.
-- Máy phát: `c7i.4xlarge`, **16 vCPU / 32 GiB**.
-
-| Chỉ số | Kết quả |
+| Chỉ số trong cửa sổ đo | t3.xlarge |
 |---|---:|
-| Tổng request | 10.000 |
-| Request đồng thời phía client, peak | 10.000 |
-| Độ lệch thời điểm bắt đầu gửi | 56 ms |
-| Response thành công, đúng dữ liệu | **2.456 — 24,56%** |
-| HTTP 500 / HTTP 502 | 52 / 7.492 |
-| Thời gian hoàn thành burst | 16,658 giây |
-| HTTP latency p95 / p99, gồm response lỗi | 6.250,84 / 7.160,51 ms |
-| EC2 backend CPU peak, toàn máy | **100%** |
-| EC2 backend RAM còn khả dụng, thấp nhất | 2.538,32 MiB |
-| Container backend CPU / RAM peak | 155,46% một core / 464,80 MiB |
-| Container PostgreSQL CPU / RAM peak | 16,14% một core / 84,87 MiB |
-| PostgreSQL kết nối tổng / active tại snapshot, peak | 10 / 0 |
-| CloudFront cache hits | 0 |
+| Throughput thành công | 1.907,31 RPS |
+| p95 / p99 latency | 19,99 / 52,80 ms |
+| Error rate | 4,219% |
+| Dropped iterations | 3.787 |
+| CPU host trung bình — sampler | 60,0% |
 
-**Kết luận baseline:** hệ thống không phục vụ thành công toàn bộ burst. Nginx ghi lỗi `1024 worker_connections are not enough` và EC2 chạm 100% CPU. Chưa xác định được trần PostgreSQL; nhiều request không được phục vụ thành công trước khi xuống DB. Các lượt tăng worker_connections và kết quả mới nhất nằm ở phần 4 bên dưới.
+**Lượt này không hợp lệ để kết luận chịu tải:** ECS deployment thay backend task lúc 22:23:03 ngày 07/10/2026, trong cửa sổ steady 22:13:30–22:23:30. Bảy phút đầu throughput khoảng 2.000 RPS, nhưng không dùng phần đó thay thế bài đo đủ 10 phút. Cần đo lại khi không có deployment.
 
-Client in-flight không phải số truy vấn SQL đồng thời. Snapshot DB có thể bỏ lỡ truy vấn ngắn; CPU container tính theo một core. Một burst không chứng minh khả năng chịu tải kéo dài.
 
-### Xem report và dữ liệu
-
-- **[Report HTML](reports/burst-report.html)** — bản ngắn, dễ đọc.
-- [Report Markdown](reports/burst-report.md) · [JSON](reports/burst-report.json).
-- Raw requests/summary: `results/burst-10k/`.
-- Telemetry: `results/backend-metrics.jsonl`.
-- Cấu hình và phục hồi: `results/metadata.json`; log gateway: `results/nginx-diagnostics.json`.
-
-Tạo lại report baseline từ dữ liệu có sẵn, **không cần khởi động infra hoặc chạy tải lại**:
-
-```powershell
-python k6/report.py --results k6/results/burst-10k --telemetry k6/results/backend-metrics.jsonl --metadata k6/results/metadata.json --output k6/reports
-```
-
-## 4. Điều chỉnh Nginx worker_connections
-
-Đã thử lần lượt **1024 → 2048 → 2500 → 4096 connection slots mỗi worker**. Giữ `worker_processes auto` (hai worker trên EC2 2 vCPU), backend `0.0.4`, database và cùng bài burst 10.000 SBD.
-
-| Chỉ số | 1024 | 2048 | 2500 | 4096 |
-|---|---:|---:|---:|---:|
-| Response thành công, đúng dữ liệu | 2.456 | 9.223 | 8.411 | **10.000** |
-| Tỷ lệ thành công | 24,56% | 92,23% | 84,11% | **100%** |
-| HTTP 500 / HTTP 502 | 52 / 7.492 | 0 / 777 | 0 / 1.589 | **0 / 0** |
-| Hoàn thành burst (giây) | 16,658 | 33,541 | 33,299 | **13,328** |
-| HTTP p95 (giây), gồm response lỗi | 6,25 | 12,85 | 11,98 | **11,90** |
-| EC2 CPU peak, toàn máy | 100% | 100% | 100% | **100%** |
-
-**Kết quả mới nhất:** lượt 4096 ngày **07/10/2026**, cửa sổ request **04:55:25.050 → 04:55:38.378 UTC**, trả đúng toàn bộ 10.000 response. Tuy nhiên p95 vẫn khoảng 11,90 giây và CPU host bão hòa; chưa đạt mục tiêu response nhanh hoặc chứng minh chịu tải kéo dài.
-
-### Cấu hình sau điều chỉnh
-
-Production được giữ ở mức 4096/worker sau test; cấu hình tương ứng trong [`infra/nginx.conf`](../infra/nginx.conf):
-
-```nginx
-worker_processes auto;
-
-events {
-    worker_connections 4096;
-}
-```
-
-`worker_connections` là số slot kết nối mỗi worker, **không phải số worker hay số request đồng thời**. Với reverse proxy, slot được dùng cho cả client → Nginx và Nginx → backend; hai worker × 4096 không đồng nghĩa phục vụ 8192 request cùng lúc. Giới hạn file descriptors đã quan sát là 65535/worker.
-
-Khi thử mức khác, lưu cấu hình cũ, cập nhật `infra/nginx.conf` và file `/etc/nginx/nginx.conf` trên backend, rồi kiểm tra/reload **trên backend EC2**:
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-Xác nhận cấu hình hiệu lực bằng `sudo nginx -T`, kiểm tra API và chạy smoke nhỏ trước burst mới. Mỗi mức dùng `$run` riêng và telemetry riêng theo phần 2; chỉ đổi worker_connections nếu mục tiêu là so sánh tham số này. Sau test, kiểm tra API phục hồi và dừng generator, không dừng backend/database.
-
-### Giới hạn và dữ liệu đối chiếu
-
-- Mỗi mức mới chỉ đo một lượt, khác thời điểm, warm state, CPU credits và mạng. Không quy toàn bộ thay đổi kết quả cho worker_connections; lượt 2500 kém 2048 không chứng minh mức 2500 luôn kém hơn.
-- Percentile các lượt trước gồm response lỗi; thành công đủ request không đồng nghĩa latency tốt.
-- Lượt 4096 có **7 cảnh báo** thiếu connection/reusing connections trong khoảng log thu trước/sau test, một số sau burst; không tương đương 7 request thất bại.
-- CPU/RAM là peak từ sampler; lượt 4096 có bốn mẫu host/container trong cửa sổ request. Snapshot PostgreSQL có thể bỏ lỡ truy vấn ngắn; chưa có bằng chứng DB đạt trần.
-- Sau lượt 4096, API public phục hồi **200, đúng SBD lúc 04:57:28 UTC**; generator được trả về `c7i.large / stopped`, EBS vẫn tính phí.
-
-**[Báo cáo so sánh đầy đủ](action/increase_worker_connections/README.md)** — tài nguyên DB/EC2, log gateway và dữ liệu từng mức:
-
-- [2048](action/increase_worker_connections/evidence/report/burst-report.md)
-- [2500](action/increase_worker_connections/2500/evidence/report/burst-report.md)
-- [4096](action/increase_worker_connections/4096/evidence/report/burst-report.md)
-
-Cập nhật report lượt 4096 từ bằng chứng đã lưu, **không chạy tải lại**:
-
-```powershell
-python k6/report.py --results k6/action/increase_worker_connections/4096/evidence/nginx-4096-20261007T045122Z --telemetry k6/action/increase_worker_connections/4096/evidence/backend-metrics.jsonl --metadata k6/action/increase_worker_connections/4096/evidence/metadata.json --output k6/action/increase_worker_connections/4096/evidence/report
-```
+[CloudWatch dashboard](https://ap-southeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-southeast-1#dashboards:name=g-scores-production)

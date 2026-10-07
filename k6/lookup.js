@@ -1,16 +1,25 @@
 import http from 'k6/http';
-import { sleep, check } from 'k6';
+import exec from 'k6/execution';
 import { SharedArray } from 'k6/data';
-import { Counter, Rate } from 'k6/metrics';
+import { Counter, Gauge, Rate } from 'k6/metrics';
 
 const REQUEST_NAME = '/api/students/:sbd';
 const SCORE_FIELD = 'toan';
-const DEFAULT_SBD_FILE = '/opt/g-scores-load-test/sbds.json';
-const REQUEST_TIMEOUT = '60s';
-const MAX_DURATION = '30m';
-const SETUP_TIMEOUT = '5m';
-const GRACEFUL_STOP = '90s';
-
+const BASE_URL = requiredText(__ENV.BASE_URL, 'BASE_URL').replace(/\/+$/, '');
+const SBD_FILE = __ENV.SBD_FILE || './sbds.json';
+const SUMMARY_FILE = requiredText(__ENV.SUMMARY_FILE, 'SUMMARY_FILE');
+const TARGET_RPS = positiveInteger(__ENV.TARGET_RPS, 'TARGET_RPS');
+const DURATION_SECONDS = positiveInteger(__ENV.DURATION_SECONDS, 'DURATION_SECONDS');
+const WARMUP_SECONDS = nonnegativeInteger(__ENV.WARMUP_SECONDS || '0', 'WARMUP_SECONDS');
+const RAMP_UP_SECONDS = nonnegativeInteger(__ENV.RAMP_UP_SECONDS || '0', 'RAMP_UP_SECONDS');
+const START_RPS = positiveInteger(__ENV.START_RPS || String(TARGET_RPS), 'START_RPS');
+const RAMP_DOWN_SECONDS = nonnegativeInteger(__ENV.RAMP_DOWN_SECONDS || '0', 'RAMP_DOWN_SECONDS');
+const PREALLOCATED_VUS = positiveInteger(__ENV.PREALLOCATED_VUS, 'PREALLOCATED_VUS');
+const MAX_VUS = positiveInteger(__ENV.MAX_VUS, 'MAX_VUS');
+const TIMEOUT_SECONDS = positiveInteger(__ENV.TIMEOUT_SECONDS, 'TIMEOUT_SECONDS');
+const REQUEST_TIMEOUT = `${TIMEOUT_SECONDS}s`;
+const GRACEFUL_STOP = `${TIMEOUT_SECONDS + 5}s`;
+const HAS_RAMP_PROFILE = RAMP_UP_SECONDS > 0 || RAMP_DOWN_SECONDS > 0;
 
 
 function requiredText(value, name) {
@@ -29,28 +38,20 @@ function positiveInteger(value, name) {
   return Number(text);
 }
 
-function normalizeBaseUrl(value) {
-  const baseUrl = requiredText(value, 'BASE_URL').replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(baseUrl)) {
-    throw new Error('BASE_URL must begin with http:// or https://');
+function nonnegativeInteger(value, name) {
+  const text = String(value);
+  if (!/^\d+$/.test(text)) {
+    throw new Error(`${name} must be a non-negative integer`);
   }
-  return baseUrl;
-}
-function nonnegativeSeconds(value, name) {
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    throw new Error(`${name} must be a non-negative number`);
-  }
-  return seconds;
+  return Number(text);
 }
 
-const VUS = positiveInteger(__ENV.VUS || '10000', 'VUS');
-const BASE_URL = normalizeBaseUrl(__ENV.BASE_URL);
-const SBD_FILE = __ENV.SBD_FILE || DEFAULT_SBD_FILE;
-const SUMMARY_FILE = requiredText(__ENV.SUMMARY_FILE, 'SUMMARY_FILE');
-const BARRIER_SECONDS = nonnegativeSeconds(__ENV.BARRIER_SECONDS || '20', 'BARRIER_SECONDS');
-const RUN_TOKEN = String(__ENV.RUN_ID || `local-${Date.now()}`);
-const STARTED_AT_UTC = new Date().toISOString();
+if (!/^https?:\/\//i.test(BASE_URL)) {
+  throw new Error('BASE_URL must begin with http:// or https://');
+}
+if (PREALLOCATED_VUS > MAX_VUS) {
+  throw new Error('PREALLOCATED_VUS must not exceed MAX_VUS');
+}
 
 const sbds = new SharedArray('lookup-sbds', () => {
   let parsed;
@@ -59,100 +60,103 @@ const sbds = new SharedArray('lookup-sbds', () => {
   } catch (error) {
     throw new Error(`Unable to parse SBD file ${SBD_FILE}: ${error}`);
   }
-
-  if (!Array.isArray(parsed) || parsed.length < VUS) {
-    throw new Error(`SBD file ${SBD_FILE} must contain at least ${VUS} entries for unique per-VU lookup`);
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error(`SBD file ${SBD_FILE} must contain at least one SBD`);
   }
-
-  const validated = parsed.map((sbd, index) => {
+  parsed.forEach((sbd, index) => {
     if (typeof sbd !== 'string' || !/^\d{8}$/.test(sbd)) {
       throw new Error(`SBD at index ${index} must be an 8-digit string`);
     }
-    return sbd;
   });
-  if (new Set(validated.slice(0, VUS)).size !== VUS) {
-    throw new Error(`The first ${VUS} SBD entries must be unique`);
-  }
-  return validated;
+  return parsed;
 });
 
 const lookupErrors = new Rate('lookup_errors');
-const cacheHit = new Rate('cache_hit');
-const responses = {
-  0: new Counter('response_network_error'),
-  200: new Counter('response_200'),
-  429: new Counter('response_429'),
-  500: new Counter('response_500'),
-  502: new Counter('response_502'),
-  503: new Counter('response_503'),
-  504: new Counter('response_504'),
-};
-const otherResponses = new Counter('response_other');
-const semanticErrors = new Counter('response_semantic_error');
+const lookupSuccess = new Counter('lookup_success');
+const lookupStarted = new Counter('lookup_started');
+const measurementWindowStart = new Gauge('measurement_window_start');
+
+const scenarios = {};
+if (WARMUP_SECONDS > 0) {
+  scenarios.warmup = {
+    executor: 'constant-arrival-rate',
+    tags: { phase: 'warmup', target_rps: String(TARGET_RPS) },
+    rate: TARGET_RPS,
+    timeUnit: '1s',
+    duration: `${WARMUP_SECONDS}s`,
+    preAllocatedVUs: PREALLOCATED_VUS,
+    maxVUs: MAX_VUS,
+    gracefulStop: '0s',
+  };
+}
+if (HAS_RAMP_PROFILE) {
+  const stages = [];
+  if (RAMP_UP_SECONDS > 0) {
+    stages.push({ duration: `${RAMP_UP_SECONDS}s`, target: TARGET_RPS });
+  }
+  stages.push({ duration: `${DURATION_SECONDS}s`, target: TARGET_RPS });
+  if (RAMP_DOWN_SECONDS > 0) {
+    stages.push({ duration: `${RAMP_DOWN_SECONDS}s`, target: 0 });
+  }
+  scenarios.profile = {
+    executor: 'ramping-arrival-rate',
+    startTime: `${WARMUP_SECONDS}s`,
+    startRate: RAMP_UP_SECONDS > 0 ? START_RPS : TARGET_RPS,
+    timeUnit: '1s',
+    stages,
+    tags: { target_rps: String(TARGET_RPS) },
+    preAllocatedVUs: PREALLOCATED_VUS,
+    maxVUs: MAX_VUS,
+    gracefulStop: GRACEFUL_STOP,
+  };
+} else {
+  scenarios.measurement = {
+    executor: 'constant-arrival-rate',
+    startTime: `${WARMUP_SECONDS}s`,
+    tags: { phase: 'measurement', target_rps: String(TARGET_RPS) },
+    rate: TARGET_RPS,
+    timeUnit: '1s',
+    duration: `${DURATION_SECONDS}s`,
+    preAllocatedVUs: PREALLOCATED_VUS,
+    maxVUs: MAX_VUS,
+    gracefulStop: GRACEFUL_STOP,
+  };
+}
 
 export const options = {
-  scenarios: {
-    lookup: {
-      executor: 'per-vu-iterations',
-      vus: VUS,
-      iterations: 1,
-      maxDuration: MAX_DURATION,
-      gracefulStop: GRACEFUL_STOP,
-    },
+  scenarios,
+  thresholds: {
+    'http_req_duration{phase:measurement}': ['p(95)<500', 'p(99)<1000'],
+    'lookup_errors{phase:measurement}': ['rate<0.01'],
   },
-  setupTimeout: SETUP_TIMEOUT,
   insecureSkipTLSVerify: false,
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
-  // Deliberately omit the raw URL system tag: nonce values are unique per request.
+  // Omit the raw URL system tag: SBD values must not create high-cardinality series.
   systemTags: [
-    'proto',
-    'subproto',
-    'status',
-    'method',
-    'name',
-    'group',
-    'check',
-    'error',
-    'error_code',
-    'tls_version',
-    'scenario',
-    'service',
-    'expected_response',
+    'proto', 'subproto', 'status', 'method', 'name', 'group', 'check', 'error',
+    'error_code', 'tls_version', 'scenario', 'service', 'expected_response',
   ],
 };
 
 const requestParams = {
-  headers: {
-    'Cache-Control': 'no-cache',
-  },
-  tags: {
-    name: REQUEST_NAME,
-  },
   responseType: 'text',
   timeout: REQUEST_TIMEOUT,
   redirects: 0,
 };
 
-function selectedSbd(vu) {
-  return sbds[vu - 1];
-}
-
-function responseHasExpectedData(response, expectedSbd) {
+function responseIsCorrect(response, expectedSbd) {
   if (!response || response.status !== 200 || typeof response.body !== 'string') {
     return false;
   }
-
   let payload;
   try {
     payload = JSON.parse(response.body);
   } catch (_) {
     return false;
   }
-
   if (!payload || typeof payload !== 'object' || payload.statusCode !== 200) {
     return false;
   }
-
   const data = payload.data;
   return data !== null
     && typeof data === 'object'
@@ -161,151 +165,58 @@ function responseHasExpectedData(response, expectedSbd) {
     && Object.prototype.hasOwnProperty.call(data, SCORE_FIELD);
 }
 
-function headerValue(headers, expectedName) {
-  if (!headers) {
-    return '';
+function phaseForIteration() {
+  if (!HAS_RAMP_PROFILE) {
+    return exec.scenario.name;
   }
-
-  const expectedLower = expectedName.toLowerCase();
-  for (const name in headers) {
-    if (name.toLowerCase() === expectedLower) {
-      return String(headers[name]);
-    }
+  const elapsedMilliseconds = Math.max(0, Date.now() - exec.scenario.startTime);
+  const rampUpMilliseconds = RAMP_UP_SECONDS * 1000;
+  const measurementMilliseconds = DURATION_SECONDS * 1000;
+  if (elapsedMilliseconds < rampUpMilliseconds) {
+    return 'ramp_up';
   }
-  return '';
+  if (elapsedMilliseconds < rampUpMilliseconds + measurementMilliseconds) {
+    return 'measurement';
+  }
+  return 'ramp_down';
 }
 
-function isCloudFrontCacheHit(response) {
-  return /hit from cloudfront/i.test(headerValue(response && response.headers, 'x-cache'));
-}
+export default function () {
+  const profile = HAS_RAMP_PROFILE && exec.scenario.name === 'profile';
+  const phase = phaseForIteration();
+  const measurement = phase === 'measurement';
+  const tags = { name: REQUEST_NAME, phase, target_rps: String(TARGET_RPS) };
+  const sbd = sbds[exec.scenario.iterationInTest % sbds.length];
+  const url = `${BASE_URL}/api/students/${encodeURIComponent(sbd)}`;
 
-export function setup() {
-  return { barrierAtMs: Date.now() + BARRIER_SECONDS * 1000 };
-}
-
-function csvField(value) {
-  const text = value === undefined || value === null ? '' : String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-export default function (setupData) {
-  const waitSeconds = Math.max(0, (setupData.barrierAtMs - Date.now()) / 1000);
-  if (waitSeconds > 0) {
-    sleep(waitSeconds);
-  }
-
-  const sbd = selectedSbd(__VU);
-  const requestId = `vu-${__VU}`;
-  const nonce = `${RUN_TOKEN}-${__VU}-${Date.now()}`;
-  const url = `${BASE_URL}/api/students/${encodeURIComponent(sbd)}?nonce=${encodeURIComponent(nonce)}`;
-  const startedMs = Date.now();
-  let response = null;
-  let correct = false;
-  let errorCode = '';
-  try {
-    response = http.get(url, requestParams);
-    correct = responseHasExpectedData(response, sbd);
-    errorCode = response && response.error_code ? response.error_code : '';
-  } catch (_) {
-    errorCode = 'request_exception';
-  }
-  const finishedMs = Date.now();
-  const status = response && Number.isFinite(response.status) ? response.status : 0;
-  const hit = isCloudFrontCacheHit(response);
-  console.log(`BURST_REQUEST,${[
-    requestId,
-    sbd,
-    startedMs,
-    finishedMs,
-    status,
-    correct,
-    hit,
-    errorCode,
-  ].map(csvField).join(',')}`);
-
-  (responses[status] || otherResponses).add(1);
-  if (status === 200 && !correct) {
-    semanticErrors.add(1);
-  }
-  lookupErrors.add(!correct, { name: REQUEST_NAME });
-  cacheHit.add(hit, { name: REQUEST_NAME });
-  check(response, {
-    'lookup response is correct': () => correct,
-  }, { name: REQUEST_NAME });
-}
-
-function normalizeMetrics(data) {
-  if (data && data.metrics && typeof data.metrics === 'object' && !Array.isArray(data.metrics)) {
-    return { format: 'legacy', metrics: data.metrics };
-  }
-
-  const machineMetrics = data && data.results && data.results.metrics;
-  if (Array.isArray(machineMetrics)) {
-    const metrics = {};
-    machineMetrics.forEach((metric) => {
-      if (metric && metric.name) {
-        metrics[metric.name] = metric;
-      }
+  if ((profile || exec.scenario.name === 'measurement') && exec.scenario.iterationInInstance === 0) {
+    const measurementStart = profile
+      ? exec.scenario.startTime + RAMP_UP_SECONDS * 1000
+      : exec.scenario.startTime;
+    measurementWindowStart.add(measurementStart, {
+      phase: 'measurement',
+      target_rps: String(TARGET_RPS),
     });
-    return { format: 'machine-readable', metrics };
   }
 
-  return { format: 'unknown', metrics: {} };
-}
+  if (measurement) {
+    lookupStarted.add(1, tags);
+  }
 
-function metricValues(metrics, name) {
-  const metric = metrics[name];
-  return metric && metric.values ? metric.values : {};
-}
+  let response = null;
+  try {
+    response = http.get(url, { ...requestParams, tags });
+  } catch (_) {
+    // A thrown request is a network failure and is counted below for measurement.
+  }
+  const correct = responseIsCorrect(response, sbd);
 
-function formatNumber(value, digits) {
-  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : 'n/a';
-}
-
-function formatRate(value) {
-  return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(2)}%` : 'n/a';
+  if (measurement) {
+    lookupErrors.add(correct ? 0 : 1, tags);
+    lookupSuccess.add(correct ? 1 : 0, tags);
+  }
 }
 
 export function handleSummary(data) {
-  const finishedAtUtc = new Date().toISOString();
-  const normalized = normalizeMetrics(data);
-  const duration = metricValues(normalized.metrics, 'http_req_duration');
-  const errors = metricValues(normalized.metrics, 'lookup_errors');
-  const cache = metricValues(normalized.metrics, 'cache_hit');
-  const summary = {
-    schemaVersion: 'g-scores-lookup-summary/v2',
-    startedAtUtc: STARTED_AT_UTC,
-    finishedAtUtc,
-    config: {
-      runToken: RUN_TOKEN,
-      baseUrl: BASE_URL,
-      vus: VUS,
-      iterationsPerVu: 1,
-      barrierSeconds: BARRIER_SECONDS,
-      maxDuration: MAX_DURATION,
-      requestTimeout: REQUEST_TIMEOUT,
-      gracefulStop: GRACEFUL_STOP,
-      sbdFile: SBD_FILE,
-      sbdCount: sbds.length,
-      requestName: REQUEST_NAME,
-      nonceQueryParameter: 'nonce',
-      cacheControl: 'no-cache',
-      tlsValidation: true,
-    },
-    k6SummaryFormat: normalized.format,
-    metrics: normalized.metrics,
-    k6Summary: data,
-  };
-  const stdout = [
-    'lookup complete:',
-    `p95=${formatNumber(duration['p(95)'], 2)}ms`,
-    `errors=${formatRate(errors.rate)}`,
-    `cache_hit=${formatRate(cache.rate)}`,
-    `summary=${SUMMARY_FILE}`,
-  ].join(' ');
-
-  return {
-    [SUMMARY_FILE]: JSON.stringify(summary, null, 2),
-    stdout: `${stdout}\n`,
-  };
+  return { [SUMMARY_FILE]: `${JSON.stringify(data, null, 2)}\n` };
 }
