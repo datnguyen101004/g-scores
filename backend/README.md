@@ -116,3 +116,45 @@ Mã môn: `toan`, `nguVan`, `ngoaiNgu`, `vatLi`, `hoaHoc`, `sinhHoc`, `lichSu`, 
 Mã mức điểm: `GTE_8`, `FROM_6_TO_8`, `FROM_4_TO_6`, `LT_4`.
 
 Có thể thử các API và xem cấu trúc response tại Swagger UI local. Xem [hướng dẫn frontend](../frontend/README.md) để chạy giao diện cùng backend.
+
+## CI và publish image lên ECR
+
+Workflow [`backend-image.yaml`](../.github/workflows/backend-image.yaml) chạy trên GitHub-hosted Ubuntu:
+
+- Pull request vào `development` hoặc `main`: chạy `mvnw verify` với Java 21 và Docker cho Testcontainers; không cấp quyền AWS.
+- Push thay đổi backend, dataset hoặc cấu hình CI/IAM vào `development`: kiểm thử thành công mới build/push image `linux/amd64` lên ECR `gscores-be`, region `ap-southeast-1`.
+- Có `workflow_dispatch`; để chạy từ giao diện Actions, workflow cần có trên nhánh mặc định `main`, rồi chọn nhánh `development`. Nhánh khác không publish.
+- Tag image: `sha-<commit>-run<run-id>-<attempt>`. Mỗi lần chạy/rerun có tag riêng vì ECR đang bật immutable tags; không dùng `latest`.
+- Tag và digest được ghi trong summary của job publish. **Pipeline chỉ build/push, không cập nhật ECS production.**
+
+### GitHub OIDC và IAM
+
+Không lưu AWS access key trong GitHub Secrets. Job publish lấy OIDC token, assume role với credentials tạm thời:
+
+`arn:aws:iam::329539068073:role/g-scores-github-backend-ecr-push`
+
+Stack [`github-actions-ecr.yaml`](../infra/github-actions-ecr.yaml) tạo OIDC provider và role. Trust policy chỉ chấp nhận audience `sts.amazonaws.com` và subject chính xác của nhánh `development` trong repository này. Repository dùng immutable subject có owner/repository IDs; không thay bằng subject chỉ có tên repository.
+
+Role được login ECR và đọc/upload layer, push manifest vào **duy nhất** repository `gscores-be`. Không được tạo/xóa repository, deploy ECS hoặc đọc Secrets Manager.
+
+Áp dụng/cập nhật stack từ root repository bằng AWS credentials quản trị hạ tầng:
+
+```bash
+aws cloudformation deploy --template-file infra/github-actions-ecr.yaml --stack-name g-scores-github-actions-ecr --capabilities CAPABILITY_NAMED_IAM --region ap-southeast-1 --no-fail-on-empty-changeset
+```
+
+Template này sở hữu GitHub OIDC provider của account; không triển khai một bản sao nếu provider đã được stack khác quản lý. Nếu dùng repository khác, lấy subject prefix thực tế trước khi đặt parameter `GitHubSubjectPrefix`:
+
+```bash
+gh api repos/datnguyen101004/g-scores/actions/oidc/customization/sub
+```
+
+Các **repository variables** đã cấu hình trong GitHub → Settings → Secrets and variables → Actions → Variables:
+
+| Variable | Giá trị |
+|---|---|
+| `AWS_REGION` | `ap-southeast-1` |
+| `AWS_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-github-backend-ecr-push` |
+| `ECR_REPOSITORY_URI` | `329539068073.dkr.ecr.ap-southeast-1.amazonaws.com/gscores-be` |
+
+Các giá trị này không phải secrets. Nếu đổi nhánh publish, cập nhật đồng thời workflow và parameter `GitHubBranch` của stack. Giới hạn người được push/merge vào `development`: code trên nhánh này được phép sử dụng role push image. Các Actions được pin bằng commit SHA.
