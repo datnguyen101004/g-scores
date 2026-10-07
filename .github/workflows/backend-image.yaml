@@ -2,7 +2,7 @@ name: Backend CI and production deploy
 
 on:
   pull_request:
-    branches: [development, main]
+    branches: [development]
     paths:
       - 'backend/**'
       - 'dataset/**'
