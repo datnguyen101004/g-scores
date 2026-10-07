@@ -1,3 +1,0 @@
-{"capturedAtUtc":"2026-10-07T04:54:21.916Z","cpuTotalTicks":274572,"cpuIdleTicks":273602,"cpuIoWaitTicks":385,"memoryAvailableKiB":31632276,"memoryTotalKiB":32311812,"memoryFreeKiB":31679320,"k6RssKiB":4976,"k6VmHwmKiB":4976}
-{"capturedAtUtc":"2026-10-07T04:54:22.916Z","cpuTotalTicks":276177,"cpuIdleTicks":275184,"cpuIoWaitTicks":393,"memoryAvailableKiB":31614596,"memoryTotalKiB":32311812,"memoryFreeKiB":31655448,"k6RssKiB":47608,"k6VmHwmKiB":47608}
-{"capturedAtUtc":"2026-10-07T04:54:23.917Z","cpuTotalTicks":277777,"cpuIdleTicks":276784,"cpuIoWaitTicks":393,"memoryAvailableKiB":31614596,"memoryTotalKiB":32311812,"memoryFreeKiB":31655448,"k6RssKiB":47620,"k6VmHwmKiB":47620}
