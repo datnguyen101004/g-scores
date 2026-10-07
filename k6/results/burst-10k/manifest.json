@@ -1,0 +1,49 @@
+{
+  "barrierSeconds": 20.0,
+  "baseUrl": "https://gscores.tdat.io.vn",
+  "command": [
+    "k6",
+    "run",
+    "--no-usage-report",
+    "--log-format=raw",
+    "--new-machine-readable-summary=false",
+    "--env",
+    "BASE_URL=https://gscores.tdat.io.vn",
+    "--env",
+    "VUS=10000",
+    "--env",
+    "BARRIER_SECONDS=20",
+    "--env",
+    "RUN_ID=20261006T172551.205Z",
+    "--env",
+    "SBD_FILE=/opt/g-scores-load-test/sbds.json",
+    "--env",
+    "SUMMARY_FILE=/opt/g-scores-load-test/results/burst-10k/summary.json",
+    "/opt/g-scores-load-test/lookup.js"
+  ],
+  "concurrencyNote": "VUs are requested; achieved concurrency is not guaranteed.",
+  "exitCode": 0,
+  "fileDescriptorLimit": {
+    "hard": 65535,
+    "required": 11024,
+    "softBefore": 65535,
+    "softForK6": 65535
+  },
+  "files": {
+    "generatorMetrics": "/opt/g-scores-load-test/results/burst-10k/generator-metrics.jsonl",
+    "requests": "/opt/g-scores-load-test/results/burst-10k/requests.csv",
+    "stdout": "/opt/g-scores-load-test/results/burst-10k/stdout.log",
+    "summary": "/opt/g-scores-load-test/results/burst-10k/summary.json"
+  },
+  "finishedAtUtc": "2026-10-06T17:26:28.825Z",
+  "launchError": null,
+  "requestRowsExtracted": 10000,
+  "requestRowsMalformed": 0,
+  "requestedVus": 10000,
+  "resultsDirectory": "/opt/g-scores-load-test/results/burst-10k",
+  "schemaVersion": "g-scores-lookup-burst/v1",
+  "startedAtUtc": "2026-10-06T17:25:51.205Z",
+  "status": "completed",
+  "summaryExists": true,
+  "vus": 10000
+}

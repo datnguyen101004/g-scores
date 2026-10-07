@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: G-Scores ECS cluster with one public EC2 host and HTTPS-only inbound access.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VpcId output from the network stack.
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: PublicSubnetId output from the network stack; requires a default route to the Internet Gateway.
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.medium
+      - t3.large
+    Description: x86_64 instance type; t3.medium has 2 vCPUs and 4 GiB RAM.
+  RootVolumeSize:
+    Type: Number
+    Default: 30
+    MinValue: 30
+    Description: Encrypted gp3 root volume size in GiB for the OS and container images.
+  EcsOptimizedAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id
+    Description: Amazon Linux 2023 ECS-optimized x86_64 AMI, resolved at deployment time.
+  CertificateHostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Public hosted zone for Certbot DNS-01 validation of api.gscores.tdat.io.vn.
+
+Resources:
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-cluster'
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ECS host; only TCP 443 inbound, administration through SSM.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Public HTTPS reverse proxy; no direct access to SSH, Spring Boot or PostgreSQL.
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ecs-hosts'
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Policies:
+        - PolicyName: CertbotDnsValidation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DiscoverHostedZones
+                Effect: Allow
+                Action: route53:ListHostedZones
+                Resource: '*'
+              - Sid: CheckDnsChange
+                Effect: Allow
+                Action: route53:GetChange
+                Resource: !Sub 'arn:${AWS::Partition}:route53:::change/*'
+              - Sid: ManageApiAcmeChallenge
+                Effect: Allow
+                Action: route53:ChangeResourceRecordSets
+                Resource: !Sub 'arn:${AWS::Partition}:route53:::hostedzone/${CertificateHostedZoneId}'
+                Condition:
+                  ForAllValues:StringEquals:
+                    route53:ChangeResourceRecordSetsNormalizedRecordNames:
+                      - _acme-challenge.api.gscores.tdat.io.vn
+                    route53:ChangeResourceRecordSetsRecordTypes:
+                      - TXT
+                    route53:ChangeResourceRecordSetsActions:
+                      - UPSERT
+                      - DELETE
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  Instance:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      ImageId: !Ref EcsOptimizedAmi
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          SubnetId: !Ref PublicSubnetId
+          AssociatePublicIpAddress: true
+          GroupSet:
+            - !Ref InstanceSecurityGroup
+      CreditSpecification:
+        CPUCredits: standard
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref RootVolumeSize
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eu
+          cat >> /etc/ecs/ecs.config <<'EOF'
+          ECS_CLUSTER=${EcsCluster}
+          ECS_RESERVED_MEMORY=512
+          EOF
+          if ! rpm -q amazon-ssm-agent >/dev/null 2>&1; then
+            dnf install -y amazon-ssm-agent
+          fi
+          systemctl enable --now amazon-ssm-agent
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ecs-instance'
+
+  ApiDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref CertificateHostedZoneId
+      Name: api.gscores.tdat.io.vn
+      Type: A
+      TTL: '300'
+      ResourceRecords:
+        - !GetAtt Instance.PublicIp
+
+Outputs:
+  ClusterName:
+    Description: ECS cluster name for backend services.
+    Value: !Ref EcsCluster
+  ClusterArn:
+    Value: !GetAtt EcsCluster.Arn
+  InstanceId:
+    Description: Standalone EC2 host managed directly by this stack.
+    Value: !Ref Instance
+  PublicIp:
+    Description: Automatically assigned public IPv4; can change after stop/start.
+    Value: !GetAtt Instance.PublicIp
+  InstanceSecurityGroupId:
+    Description: Host security group allowing only HTTPS inbound; backend tasks should use bridge networking behind the host reverse proxy.
+    Value: !Ref InstanceSecurityGroup
+  InstanceRoleArn:
+    Description: EC2 host role, not the application task role or task execution role.
+    Value: !GetAtt InstanceRole.Arn
+  ResolvedAmiId:
+    Value: !Ref EcsOptimizedAmi
+  BackendHttpsUrl:
+    Value: https://api.gscores.tdat.io.vn

@@ -1,0 +1,20 @@
+{
+  "errorWindowUtc": "2026-10-06T17:26:00Z/2026-10-06T17:27:00Z",
+  "errorRows": 7264,
+  "workerConnectionLimitErrors": 7264,
+  "burstAccessRows": 2508,
+  "burstAccessStatuses": {
+    "200": 2456,
+    "500": 52
+  },
+  "errorExamples": [
+    "2026/10/06 17:26:14 [warn] 6711#6711: 1024 worker_connections are not enough, reusing connections",
+    "2026/10/06 17:26:14 [warn] 6713#6713: 1024 worker_connections are not enough, reusing connections",
+    "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+    "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+    "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+    "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+    "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+    "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough"
+  ]
+}

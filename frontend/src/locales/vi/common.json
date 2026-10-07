@@ -1,0 +1,28 @@
+{
+  "app": {
+    "language": "Ngôn ngữ",
+    "sidebar": {
+      "openMenu": "Mở menu điều hướng",
+      "closeMenu": "Đóng menu điều hướng",
+      "collapse": "Thu gọn thanh điều hướng",
+      "expand": "Mở rộng thanh điều hướng",
+      "navigationLabel": "Thanh điều hướng G-Scores",
+      "primaryNavigation": "Điều hướng chính",
+      "brandLinkLabel": "G-Scores — Tra cứu điểm thi",
+      "dashboard": "Tra cứu điểm",
+      "overview": "Tổng quan",
+      "report": "Báo cáo",
+      "brandDescription": "Điểm thi THPT 2024"
+    },
+    "themeToggle": "Chuyển đổi giao diện sáng hoặc tối",
+    "notFound": {
+      "title": "Không tìm thấy trang | G-Scores",
+      "description": "Trang bạn yêu cầu không tồn tại. Quay lại dashboard G-Scores để tra cứu điểm thi.",
+      "heading": "Không tìm thấy trang",
+      "imageAlt": "Hình minh họa lỗi 404",
+      "message": "Đường dẫn này không tồn tại trong G-Scores.",
+      "backHome": "Về dashboard"
+    },
+    "copyright": "© {year} - G-Scores"
+  }
+}

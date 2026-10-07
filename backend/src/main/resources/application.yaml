@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: backend
+  config:
+    # Read Docker's local credentials when starting Spring Boot from backend/.
+    import: "optional:file:.env[.properties]"
+  datasource:
+    url: jdbc:postgresql://localhost:5433/g_scores
+    username: g_scores
+    password: ${POSTGRES_PASSWORD}
+  flyway:
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+app:
+  seed:
+    # Read only while the versioned seed migration is still pending.
+    csv-path: ${SEED_CSV_PATH:../dataset/diem_thi_thpt_2024.csv}

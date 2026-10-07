@@ -1,0 +1,36 @@
+{
+  "CommandId": "0f3a13d2-6cc6-473e-9a5e-bdd855c5e773",
+  "InstanceId": "i-0d6d2c1f77ad58573",
+  "Comment": "",
+  "DocumentName": "AWS-RunShellScript",
+  "DocumentVersion": "$DEFAULT",
+  "PluginName": "aws:runShellScript",
+  "ResponseCode": 0,
+  "ExecutionStartDateTime": "2026-10-06T17:25:51.176Z",
+  "ExecutionElapsedTime": "PT37.656S",
+  "ExecutionEndDateTime": "2026-10-06T17:26:28.176Z",
+  "Status": "Success",
+  "StatusDetails": "Success",
+  "StandardOutputContent": "2026-10-06T17:25:51.205Z results=/opt/g-scores-load-test/results/burst-10k\n2026-10-06T17:25:51.205Z requested vus=10000; achieved concurrency is not guaranteed; barrier=20s\n2026-10-06T17:26:28.825Z burst finished exit=0 request_rows=10000 malformed_rows=0 summary=/opt/g-scores-load-test/results/burst-10k/summary.json\n",
+  "StandardOutputUrl": "",
+  "StandardErrorContent": "",
+  "StandardErrorUrl": "",
+  "CloudWatchOutputConfig": {
+    "CloudWatchLogGroupName": "",
+    "CloudWatchOutputEnabled": false
+  },
+  "ResponseMetadata": {
+    "RequestId": "6f7f8bdc-0302-4436-9c35-29e42eeebb16",
+    "HTTPStatusCode": 200,
+    "HTTPHeaders": {
+      "server": "Server",
+      "date": "Tue, 06 Oct 2026 17:26:30 GMT",
+      "content-type": "application/x-amz-json-1.1",
+      "content-length": "905",
+      "connection": "keep-alive",
+      "x-amzn-requestid": "6f7f8bdc-0302-4436-9c35-29e42eeebb16",
+      "cache-control": "no-store"
+    },
+    "RetryAttempts": 0
+  }
+}

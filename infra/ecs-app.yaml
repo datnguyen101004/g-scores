@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: G-Scores backend, PostgreSQL and authenticated Redis cache on a single existing ECS EC2 host.
+
+Parameters:
+  ClusterName:
+    Type: String
+  BackendImage:
+    Type: String
+    Description: Immutable ECR runtime image URI including tag or digest.
+
+Resources:
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: G-Scores PostgreSQL credentials.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"g_scores","dbname":"g_scores"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+
+  RedisSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: G-Scores Redis cache password.
+      GenerateSecretString:
+        PasswordLength: 32
+        ExcludePunctuation: true
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      Policies:
+        - PolicyName: ReadServiceCredentials
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref RedisSecret
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities:
+        - EC2
+      NetworkMode: bridge
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      Volumes:
+        - Name: postgres-data
+          DockerVolumeConfiguration:
+            Scope: shared
+            Autoprovision: true
+            Driver: local
+      ContainerDefinitions:
+        - Name: postgres
+          Image: postgres:17-alpine
+          Essential: true
+          Cpu: 512
+          Memory: 768
+          Environment:
+            - Name: POSTGRES_DB
+              Value: g_scores
+            - Name: POSTGRES_USER
+              Value: g_scores
+          Secrets:
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub '${DatabaseSecret}:password::'
+          MountPoints:
+            - SourceVolume: postgres-data
+              ContainerPath: /var/lib/postgresql/data
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - pg_isready -U g_scores -d g_scores
+            Interval: 10
+            Timeout: 5
+            Retries: 5
+            StartPeriod: 30
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: postgres
+        - Name: redis
+          Image: redis:7.4.2-alpine
+          Essential: true
+          Cpu: 128
+          Memory: 128
+          Command:
+            - sh
+            - -c
+            - exec redis-server --save '' --appendonly no --maxmemory 64mb --maxmemory-policy allkeys-lru --requirepass "$REDIS_PASSWORD"
+          Secrets:
+            - Name: REDIS_PASSWORD
+              ValueFrom: !Ref RedisSecret
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - test "$(REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping)" = PONG
+            Interval: 10
+            Timeout: 5
+            Retries: 5
+            StartPeriod: 10
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: redis
+        - Name: backend
+          Image: !Ref BackendImage
+          Essential: true
+          Cpu: 1024
+          Memory: 2048
+          Links:
+            - postgres:postgres
+            - redis:redis
+          DependsOn:
+            - ContainerName: postgres
+              Condition: HEALTHY
+            - ContainerName: redis
+              Condition: HEALTHY
+          Environment:
+            - Name: SERVER_PORT
+              Value: '8080'
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: production
+            - Name: SPRING_DATA_REDIS_HOST
+              Value: redis
+            - Name: SPRING_DATA_REDIS_PORT
+              Value: '6379'
+            - Name: CACHE_TTL_SECONDS
+              Value: '3600'
+            - Name: SPRING_DATASOURCE_URL
+              Value: jdbc:postgresql://postgres:5432/g_scores
+            - Name: SPRING_DATASOURCE_USERNAME
+              Value: g_scores
+            - Name: JAVA_TOOL_OPTIONS
+              Value: -Xms256m -Xmx1024m
+          Secrets:
+            - Name: SPRING_DATASOURCE_PASSWORD
+              ValueFrom: !Sub '${DatabaseSecret}:password::'
+            - Name: SPRING_DATA_REDIS_PASSWORD
+              ValueFrom: !Ref RedisSecret
+          PortMappings:
+            - ContainerPort: 8080
+              HostPort: 8080
+              Protocol: tcp
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - wget --quiet --spider http://127.0.0.1:8080/v3/api-docs || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 5
+            StartPeriod: 300
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: backend
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ClusterName
+      LaunchType: EC2
+      DesiredCount: 1
+      TaskDefinition: !Ref TaskDefinition
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+
+Outputs:
+  ServiceName:
+    Value: !GetAtt Service.Name
+  TaskDefinitionArn:
+    Value: !Ref TaskDefinition
+  LogGroupName:
+    Value: !Ref LogGroup
+  DatabaseSecretArn:
+    Value: !Ref DatabaseSecret
+  RedisSecretArn:
+    Value: !Ref RedisSecret

@@ -1,0 +1,14 @@
+# Build with repository root as context: docker build -f backend/Dockerfile .
+# Allow only backend build inputs and the public exam dataset; exclude .env,
+# frontend, local Maven artifacts, VCS, and editor files from the context.
+**
+!backend/
+!backend/pom.xml
+!backend/mvnw
+!backend/.mvn/
+!backend/.mvn/**
+!backend/src/
+!backend/src/main/
+!backend/src/main/**
+!dataset/
+!dataset/diem_thi_thpt_2024.csv

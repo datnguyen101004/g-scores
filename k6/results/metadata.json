@@ -1,0 +1,182 @@
+{
+  "capturedAtUtc": "2026-10-06T17:11:30.652Z",
+  "instances": [
+    {
+      "id": "i-0ca15f1d1e04c71f4",
+      "type": "t3.medium",
+      "state": "running",
+      "az": "ap-southeast-1a"
+    },
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.large",
+      "state": "stopped",
+      "az": "ap-southeast-1a"
+    }
+  ],
+  "credits": {
+    "InstanceCreditSpecifications": [
+      {
+        "InstanceId": "i-0ca15f1d1e04c71f4",
+        "CpuCredits": "standard"
+      }
+    ]
+  },
+  "dbPreflight": "{\"version\" : \"PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit\", \"max_connections\" : \"100\", \"shared_buffers\" : \"128MB\", \"work_mem\" : \"4MB\", \"rows\" : 1061605, \"db_bytes\" : 136443571}\r\n{\"BlockIO\":\"0B / 807kB\",\"CPUPerc\":\"0.20%\",\"Container\":\"055822be8521\",\"ID\":\"055822be8521\",\"MemPerc\":\"19.77%\",\"MemUsage\":\"404.8MiB / 2GiB\",\"Name\":\"ecs-g-scores-app-TaskDefinition-PrT3TvNO1ydM-1-backend-c8dac3eaa18ebd974e00\",\"NetIO\":\"67.7kB / 84.2kB\",\"PIDs\":\"39\"}\r\n{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"0.45%\",\"Container\":\"0088cbca179e\",\"ID\":\"0088cbca179e\",\"MemPerc\":\"2.47%\",\"MemUsage\":\"3.168MiB / 128MiB\",\"Name\":\"ecs-g-scores-app-TaskDefinition-PrT3TvNO1ydM-1-redis-c0bdd28c91dcfc85a301\",\"NetIO\":\"16.8kB / 13.2kB\",\"PIDs\":\"6\"}\r\n{\"BlockIO\":\"0B / 819kB\",\"CPUPerc\":\"0.01%\",\"Container\":\"3d69625fa5c8\",\"ID\":\"3d69625fa5c8\",\"MemPerc\":\"6.28%\",\"MemUsage\":\"48.23MiB / 768MiB\",\"Name\":\"ecs-g-scores-app-TaskDefinition-PrT3TvNO1ydM-1-postgres-ecf9bf8190c3939d1500\",\"NetIO\":\"45.5kB / 39.4kB\",\"PIDs\":\"16\"}\r\n{\"BlockIO\":\"314MB / 7.48MB\",\"CPUPerc\":\"0.12%\",\"Container\":\"a7f9ba57f8d3\",\"ID\":\"a7f9ba57f8d3\",\"MemPerc\":\"0.57%\",\"MemUsage\":\"22.01MiB / 3.75GiB\",\"Name\":\"ecs-agent\",\"NetIO\":\"0B / 0B\",\"PIDs\":\"11\"}\r\n\r\n",
+  "cpuCreditBefore": {
+    "Label": "CPUCreditBalance",
+    "Datapoints": [
+      {
+        "Timestamp": "2026-10-07T00:07:00+07:00",
+        "Average": 47.6718917,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-06T23:42:00+07:00",
+        "Average": 39.7608345,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-06T23:47:00+07:00",
+        "Average": 41.51755361666667,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-06T23:52:00+07:00",
+        "Average": 43.27010106666667,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-06T23:57:00+07:00",
+        "Average": 45.02604665,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T00:02:00+07:00",
+        "Average": 46.1009049,
+        "Unit": "Count"
+      }
+    ]
+  },
+  "ecs": [
+    {
+      "task": "arn:aws:ecs:ap-southeast-1:329539068073:task/g-scores-ecs-EcsCluster-RA8qSZM9ePV1/6b8588d553564b8285cdcbb4c74752e6",
+      "health": "HEALTHY",
+      "containers": [
+        {
+          "name": "postgres",
+          "image": "postgres:17-alpine",
+          "health": "HEALTHY"
+        },
+        {
+          "name": "backend",
+          "image": "329539068073.dkr.ecr.ap-southeast-1.amazonaws.com/gscores-be:0.0.4",
+          "health": "HEALTHY"
+        },
+        {
+          "name": "redis",
+          "image": "redis:7.4.2-alpine",
+          "health": "HEALTHY"
+        }
+      ]
+    }
+  ],
+  "generatorPreflight": {
+    "type": "c7i.large",
+    "vcpus": 2,
+    "memTotalMiB": 3815,
+    "memAvailableMiB": 3420,
+    "swapMiB": 0,
+    "fileDescriptorLimit": 65535,
+    "portRange": [
+      32768,
+      60999
+    ],
+    "ntpSynchronized": true,
+    "k6": "2.3.0"
+  },
+  "target": "https://gscores.tdat.io.vn",
+  "generatorDuring": [
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.4xlarge",
+      "state": "running"
+    }
+  ],
+  "measurementNotes": {
+    "client": "One GET per VU,60s timeout,no retry,public Amplify route; observed concurrency measured from start/end around http.get",
+    "telemetry": "1s requested interval; Docker stats may cause longer actual collection cadence",
+    "cpuCredits": "CloudWatch300s period; not instantaneous burst peak",
+    "backendUnchanged": true
+  },
+  "publicRecoveryAttempt": {
+    "timestampUtc": "2026-10-06T17:27:43.063Z",
+    "status": 429,
+    "body": null,
+    "note": "CloudFront429 observed after public burst; not treated as successful recovery"
+  },
+  "nginxDiagnostics": {
+    "errorWindowUtc": "2026-10-06T17:26:00Z/2026-10-06T17:27:00Z",
+    "errorRows": 7264,
+    "workerConnectionLimitErrors": 7264,
+    "burstAccessRows": 2508,
+    "burstAccessStatuses": {
+      "200": 2456,
+      "500": 52
+    },
+    "errorExamples": [
+      "2026/10/06 17:26:14 [warn] 6711#6711: 1024 worker_connections are not enough, reusing connections",
+      "2026/10/06 17:26:14 [warn] 6713#6713: 1024 worker_connections are not enough, reusing connections",
+      "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+      "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+      "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+      "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+      "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough",
+      "2026/10/06 17:26:14 [alert] 6711#6711: 1024 worker_connections are not enough"
+    ]
+  },
+  "recovery": {
+    "timestampUtc": "2026-10-06T17:28:32.956Z",
+    "origin": {
+      "status": 200,
+      "correct": true
+    },
+    "public": {
+      "status": 429,
+      "correct": false
+    },
+    "databaseRows": 1061605
+  },
+  "generatorAfter": [
+    {
+      "id": "i-0d6d2c1f77ad58573",
+      "type": "c7i.large",
+      "state": "stopped"
+    }
+  ],
+  "cpuCreditAfter": {
+    "Label": "CPUCreditBalance",
+    "Datapoints": [
+      {
+        "Timestamp": "2026-10-07T00:25:00+07:00",
+        "Average": 52.91629595,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T00:30:00+07:00",
+        "Average": 53.89455973333333,
+        "Unit": "Count"
+      },
+      {
+        "Timestamp": "2026-10-07T00:20:00+07:00",
+        "Average": 51.16645046666667,
+        "Unit": "Count"
+      }
+    ]
+  },
+  "finalRecovery": {
+    "timestampUtc": "2026-10-06T17:35:52.151Z",
+    "publicStatus": 200,
+    "publicCorrect": true
+  }
+}
