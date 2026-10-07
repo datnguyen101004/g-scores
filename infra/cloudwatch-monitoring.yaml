@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: G-Scores host and Nginx CloudWatch metrics, logs, and agent configuration.
+
+Parameters:
+  HostInstanceId:
+    Type: AWS::EC2::Instance::Id
+    Default: i-0ca15f1d1e04c71f4
+    Description: Existing G-Scores ECS host instance to configure with the CloudWatch agent.
+  InstanceRoleName:
+    Type: String
+    Default: g-scores-ecs-InstanceRole-aHEfZIy1mPtQ
+    Description: Existing EC2 instance role used by the G-Scores host.
+
+Resources:
+  NginxAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /g-scores/nginx/access
+      RetentionInDays: 14
+
+  NginxErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /g-scores/nginx/error
+      RetentionInDays: 14
+
+  NginxRequestCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref NginxAccessLogGroup
+      FilterName: GScoresApiRequestCount
+      FilterPattern: '{ $.path = "/api/*" }'
+      MetricTransformations:
+        - MetricName: RequestCount
+          MetricNamespace: GScores/Nginx
+          MetricValue: '1'
+          Unit: Count
+          DefaultValue: 0
+
+  NginxHttpErrorCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref NginxAccessLogGroup
+      FilterName: GScoresApiHttpErrorCount
+      FilterPattern: '{ $.path = "/api/*" && $.status >= 400 }'
+      MetricTransformations:
+        - MetricName: HttpErrorCount
+          MetricNamespace: GScores/Nginx
+          MetricValue: '1'
+          Unit: Count
+          DefaultValue: 0
+
+  NginxServerErrorCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref NginxAccessLogGroup
+      FilterName: GScoresApiServerErrorCount
+      FilterPattern: '{ $.path = "/api/*" && $.status >= 500 }'
+      MetricTransformations:
+        - MetricName: ServerErrorCount
+          MetricNamespace: GScores/Nginx
+          MetricValue: '1'
+          Unit: Count
+          DefaultValue: 0
+
+  NginxRequestDurationMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref NginxAccessLogGroup
+      FilterName: GScoresApiRequestDurationSeconds
+      FilterPattern: '{ $.path = "/api/*" }'
+      MetricTransformations:
+        - MetricName: RequestDurationSeconds
+          MetricNamespace: GScores/Nginx
+          MetricValue: $.request_time
+          Unit: Seconds
+
+  CloudWatchAgentPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GScoresCloudWatchAgent
+      Roles:
+        - !Ref InstanceRoleName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublishHostMetrics
+            Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: GScores/Host
+          - Sid: PublishNginxLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Resource:
+              - !GetAtt NginxAccessLogGroup.Arn
+              - !GetAtt NginxErrorLogGroup.Arn
+
+  AgentConfiguration:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /g-scores/monitoring/cloudwatch-agent
+      Type: String
+      Description: CloudWatch agent configuration for the G-Scores host.
+      Value: !Sub |
+        {
+          "agent": {
+            "metrics_collection_interval": 60,
+            "region": "${AWS::Region}",
+            "run_as_user": "root",
+            "usage_data": false
+          },
+          "metrics": {
+            "namespace": "GScores/Host",
+            "append_dimensions": {
+              "InstanceId": "${!aws:InstanceId}"
+            },
+            "aggregation_dimensions": [["InstanceId"]],
+            "metrics_collected": {
+              "cpu": {
+                "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_steal"],
+                "totalcpu": true,
+                "metrics_collection_interval": 60,
+                "drop_original_metrics": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_steal"]
+              },
+              "mem": {
+                "measurement": ["mem_used_percent"],
+                "metrics_collection_interval": 60
+              },
+              "disk": {
+                "resources": ["/"],
+                "measurement": ["used_percent"],
+                "metrics_collection_interval": 60,
+                "drop_original_metrics": ["disk_used_percent"]
+              }
+            }
+          },
+          "logs": {
+            "logs_collected": {
+              "files": {
+                "collect_list": [
+                  {
+                    "file_path": "/var/log/nginx/monitoring-access.log",
+                    "log_group_name": "${NginxAccessLogGroup}",
+                    "log_stream_name": "{instance_id}"
+                  },
+                  {
+                    "file_path": "/var/log/nginx/error.log",
+                    "log_group_name": "${NginxErrorLogGroup}",
+                    "log_stream_name": "{instance_id}",
+                    "timestamp_format": "%Y/%m/%d %H:%M:%S",
+                    "timezone": "UTC"
+                  }
+                ]
+              }
+            }
+          }
+        }
+
+  CloudWatchAgentAssociation:
+    Type: AWS::SSM::Association
+    DependsOn: CloudWatchAgentPolicy
+    Properties:
+      AssociationName: !Sub '${AWS::StackName}-cloudwatch-agent'
+      Name: AWS-RunShellScript
+      Targets:
+        - Key: InstanceIds
+          Values:
+            - !Ref HostInstanceId
+      WaitForSuccessTimeoutSeconds: 600
+      Parameters:
+        commands:
+          - !Sub |
+              set -eu
+              dnf install -y amazon-cloudwatch-agent
+              cat > /opt/aws/amazon-cloudwatch-agent/etc/g-scores.json <<'EOF'
+              ${AgentConfiguration.Value}
+              EOF
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/g-scores.json -s
+              systemctl enable amazon-cloudwatch-agent
+        executionTimeout:
+          - '600'
+
+Outputs:
+  NginxAccessLogGroupName:
+    Description: CloudWatch Logs group containing structured Nginx access events.
+    Value: !Ref NginxAccessLogGroup
+  NginxErrorLogGroupName:
+    Description: CloudWatch Logs group containing Nginx errors with parsed source timestamps.
+    Value: !Ref NginxErrorLogGroup
+  AgentConfigurationParameterName:
+    Description: Systems Manager Parameter Store name for the host agent configuration.
+    Value: !Ref AgentConfiguration

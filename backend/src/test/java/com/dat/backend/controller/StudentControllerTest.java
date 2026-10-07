@@ -16,10 +16,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -80,38 +82,27 @@ class StudentControllerTest {
     }
 
     @Test
-    void listEndpointIsNoLongerAvailable() throws Exception {
-        mockMvc.perform(get("/api/students"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.statusCode").value(500))
+    void unknownRouteReturnsNotFoundWithoutAStudentPayload() throws Exception {
+        mockMvc.perform(get("/api/unknown-route"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value(404))
+                .andExpect(jsonPath("$.path").value("/api/unknown-route"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
-    void unsupportedMethodUsesInternalServerErrorEnvelope() throws Exception {
+    void unsupportedMethodReturnsMethodNotAllowedWithAllowedMethods() throws Exception {
         mockMvc.perform(post("/api/students/00000001"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.statusCode").value(500))
-                .andExpect(jsonPath("$.length()").value(4))
-                .andExpect(jsonPath("$.timestamp").isString());
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Allow", containsString("GET")))
+                .andExpect(jsonPath("$.statusCode").value(405));
     }
 
     @Test
-    void unknownApiPathUsesErrorEnvelope() throws Exception {
-        mockMvc.perform(get("/api/unknown-route"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.statusCode").value(500))
-                .andExpect(jsonPath("$.length()").value(4))
-                .andExpect(jsonPath("$.timestamp").isString());
-    }
-
-    @Test
-    void unsupportedResponseFormatStillReturnsJsonError() throws Exception {
+    void unsupportedResponseFormatReturnsNotAcceptable() throws Exception {
         mockMvc.perform(get("/api/students/00000001").accept("application/xml"))
-                .andExpect(status().isInternalServerError())
+                .andExpect(status().isNotAcceptable())
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
-                .andExpect(jsonPath("$.statusCode").value(500))
-                .andExpect(jsonPath("$.length()").value(4))
-                .andExpect(jsonPath("$.timestamp").isString());
+                .andExpect(jsonPath("$.statusCode").value(406));
     }
 }

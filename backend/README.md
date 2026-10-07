@@ -1,66 +1,61 @@
 # G-Scores Backend
 
-Backend cho ứng dụng tra cứu và thống kê điểm thi THPT 2024, sử dụng Java 21, Spring Boot, PostgreSQL, Flyway và Redis.
-
-## Demo
+API tra cứu và thống kê điểm thi THPT 2024, dùng Java 21, Spring Boot, PostgreSQL, Flyway và Redis.
 
 - **Ứng dụng:** <https://gscores.tdat.io.vn>
 - **API:** <https://api.gscores.tdat.io.vn>
 - **Tra cứu thử:** <https://api.gscores.tdat.io.vn/api/students/01000001>
 
-## Tính năng
+## Backend làm gì?
 
-- Tra cứu điểm theo số báo danh, giữ nguyên số `0` ở đầu; môn không có điểm trả `null`.
-- Xếp hạng top 10 khối A theo tổng điểm Toán, Vật lí, Hóa học, bao gồm thí sinh đồng hạng ở vị trí cuối.
+- Tra cứu điểm theo số báo danh, giữ nguyên số `0` ở đầu. Môn không có điểm trả về `null`.
+- Xếp hạng top 10 khối A theo tổng điểm Toán, Vật lí và Hóa học, gồm cả thí sinh đồng hạng ở vị trí cuối.
 - Thống kê số thí sinh theo chín môn và bốn mức điểm: `≥ 8`, `6 ≤ điểm < 8`, `4 ≤ điểm < 6`, `< 4`.
-- Phổ điểm từng môn theo 10 khoảng từ 0 đến 10, kèm số thí sinh có điểm, điểm trung bình và trung vị.
-- Tự tạo schema và nhập dataset bằng Flyway khi khởi tạo database.
-- Redis cache cho phổ điểm, thống kê mức điểm và top 10; TTL mặc định một giờ. Tra cứu SBD không dùng cache.
-- Tài liệu API tương tác bằng Swagger UI.
+- Trả phổ điểm từng môn theo 10 khoảng từ 0 đến 10, kèm số thí sinh có điểm, điểm trung bình và trung vị.
 
-## Chạy bằng Docker Compose
+Flyway tạo schema và nhập dataset khi khởi tạo database. Các API thống kê và top 10 dùng Redis cache; tra cứu từng số báo danh đọc trực tiếp từ PostgreSQL.
 
-### Yêu cầu
+## Chạy nhanh bằng Docker Compose
 
-- Docker và Docker Compose v2.
-- Dataset tại `dataset/diem_thi_thpt_2024.csv` ở root repository.
+Cần Docker, Docker Compose v2 và file `dataset/diem_thi_thpt_2024.csv` ở root repository.
 
-Cách này chạy cả backend, PostgreSQL và Redis; không cần cài Java hoặc Maven trên máy.
+Chạy các lệnh dưới đây trong thư mục `backend/`.
 
-### Các bước
+### 1. Chuẩn bị cấu hình
 
-1. Mở terminal trong thư mục `backend/`.
-2. Copy `.env.example` thành `.env` và đặt `POSTGRES_PASSWORD` riêng. Giữ các giá trị database/user mặc định nếu chưa cần tùy chỉnh.
+Copy `.env.example` thành `.env`, rồi đổi `POSTGRES_PASSWORD` thành mật khẩu riêng. Nếu đã có `.env`, giữ file hiện tại.
 
-   **Windows PowerShell:**
-   ```powershell
-   Copy-Item .env.example .env
-   ```
+**Windows PowerShell:**
 
-   **Linux/macOS:**
-   ```bash
-   cp .env.example .env
-   ```
+```powershell
+Copy-Item .env.example .env
+```
 
-   Nếu đã có `.env`, dùng file hiện tại thay vì ghi đè.
+**Linux/macOS:**
 
-3. Tải image PostgreSQL và khởi động dự án:
+```bash
+cp .env.example .env
+```
 
-   ```bash
-   docker pull postgres:17-alpine
-   docker compose up -d --build --wait
-   docker compose ps
-   ```
+### 2. Khởi động
 
-Lần chạy đầu có thể mất thêm thời gian để build và nhập dataset. Nếu cần theo dõi:
+```bash
+docker pull postgres:17-alpine
+docker compose up -d --build --wait
+docker compose ps
+```
+
+Lần đầu sẽ lâu hơn vì cần build image và nhập dataset. Xem tiến trình bằng:
 
 ```bash
 docker compose logs -f backend
 ```
 
-### Địa chỉ local
+### 3. Thử API
 
-| Thành phần | Địa chỉ |
+Mở <http://localhost:8080/api/students/01000001> hoặc dùng Swagger UI để thử các endpoint.
+
+| Thành phần | Địa chỉ local |
 |---|---|
 | Backend API | <http://localhost:8080> |
 | Swagger UI | <http://localhost:8080/swagger-ui/index.html> |
@@ -68,19 +63,19 @@ docker compose logs -f backend
 | PostgreSQL | `localhost:5433` |
 | Redis | `localhost:6380` |
 
-Có thể đổi `BACKEND_PORT`, `DB_PORT`, `REDIS_PORT` và `CACHE_TTL_SECONDS` trong `.env`. Nếu đổi cổng backend, cập nhật proxy của [frontend](../frontend/README.md).
+Có thể đổi `BACKEND_PORT`, `DB_PORT` và `REDIS_PORT` trong `.env`. Nếu đổi cổng backend, cập nhật proxy của [frontend](../frontend/README.md).
 
-Dừng các service:
+Dừng các service bằng:
 
 ```bash
 docker compose down
 ```
 
-Dữ liệu PostgreSQL được giữ trong Docker volume. **Không thêm `-v` nếu muốn giữ dữ liệu.**
+Dữ liệu PostgreSQL được giữ trong Docker volume. Không thêm `-v` nếu muốn giữ dữ liệu.
 
-## Chạy bằng Java để phát triển
+## Chạy Java khi phát triển
 
-Yêu cầu JDK 21; dùng Maven Wrapper có sẵn trong repository. Chuẩn bị `.env` và dataset như hướng dẫn trên, rồi chạy từ `backend/`:
+Cần JDK 21; repository đã có Maven Wrapper, không cần cài Maven riêng. Chuẩn bị `.env` và dataset như trên, rồi chạy từ `backend/`:
 
 ```bash
 docker pull postgres:17-alpine
@@ -100,98 +95,146 @@ docker compose up -d --wait postgres redis
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Backend chạy tại <http://localhost:8080>. Cấu hình mặc định dùng database `g_scores`, user `g_scores`, PostgreSQL cổng `5433` và Redis cổng `6380`. Nếu thay cấu hình PostgreSQL, cập nhật datasource trong `src/main/resources/application.yaml`; Redis được cấu hình qua `.env`.
+Backend chạy tại <http://localhost:8080>. Mặc định dùng database `g_scores`, user `g_scores`, PostgreSQL cổng `5433` và Redis cổng `6380`.
 
-## Sử dụng các tính năng qua API
+Khi chạy Java trực tiếp, datasource nằm trong [`application.yaml`](src/main/resources/application.yaml): nếu đổi host, cổng, tên database hoặc user, cập nhật cấu hình này cho khớp. Mật khẩu PostgreSQL và cấu hình kết nối Redis được đọc từ `.env`. Khi chạy bằng Compose, cấu hình kết nối được truyền vào container từ [`docker-compose.yaml`](docker-compose.yaml).
+
+### Chạy kiểm tra
+
+Từ thư mục `backend/`:
+
+```powershell
+# Windows PowerShell
+.\mvnw.cmd -B -ntp verify
+```
+
+```bash
+# Linux/macOS
+./mvnw -B -ntp verify
+```
+
+Đây cũng là lệnh được dùng trong CI.
+
+## Các API chính
 
 | Chức năng | Ví dụ request |
 |---|---|
-| Tra cứu SBD | `GET /api/students/01000001` |
+| Tra cứu số báo danh | `GET /api/students/01000001` |
 | Top 10 khối A | `GET /api/students/top-10` |
 | Đếm thí sinh Toán ≥ 8 | `GET /api/reports/students?subject=toan&scoreBand=GTE_8` |
 | Phổ điểm Toán | `GET /api/reports/distribution?subject=toan` |
 
-Mã môn: `toan`, `nguVan`, `ngoaiNgu`, `vatLi`, `hoaHoc`, `sinhHoc`, `lichSu`, `diaLi`, `gdcd`.
+- **Mã môn:** `toan`, `nguVan`, `ngoaiNgu`, `vatLi`, `hoaHoc`, `sinhHoc`, `lichSu`, `diaLi`, `gdcd`.
+- **Mã mức điểm:** `GTE_8`, `FROM_6_TO_8`, `FROM_4_TO_6`, `LT_4`.
 
-Mã mức điểm: `GTE_8`, `FROM_6_TO_8`, `FROM_4_TO_6`, `LT_4`.
+Phổ điểm gồm 10 khoảng rộng 1 điểm: `[0, 1)` đến `[8, 9)` và khoảng cuối `[9, 10]`, bao gồm điểm 10.
 
-Có thể thử các API và xem cấu trúc response tại Swagger UI local. Xem [hướng dẫn frontend](../frontend/README.md) để chạy giao diện cùng backend.
+API trả lỗi JSON với HTTP status tương ứng: `400` cho tham số báo cáo không hợp lệ, `404` cho SBD hoặc route không tồn tại, `405` cho method không hỗ trợ (kèm header `Allow`), `406` cho định dạng response không hỗ trợ. Lỗi hệ thống thực sự trả `500`.
 
-## CI/CD: publish ECR và deploy ECS production
+Swagger UI có cấu trúc request/response và cho phép gọi API trực tiếp. Để chạy giao diện cùng backend, xem [README frontend](../frontend/README.md).
 
-Workflow [`backend-image.yaml`](../.github/workflows/backend-image.yaml) chạy trên GitHub-hosted Ubuntu:
+## Redis cache
 
-- Pull request vào `development` hoặc `main`: chạy `mvnw verify` với Java 21 và Docker cho Testcontainers; không cấp quyền AWS.
-- Push thay đổi backend, dataset hoặc cấu hình CI/IAM/ECS vào `development`: kiểm thử thành công → build/push image `linux/amd64` lên ECR `gscores-be` → deploy production ở region `ap-southeast-1`.
-- Có `workflow_dispatch`; để chạy từ giao diện Actions, workflow cần có trên nhánh mặc định `main`, rồi chọn nhánh `development`. Nhánh khác không publish.
-- Tag image: `sha-<commit>-run<run-id>-<attempt>`. Mỗi lần chạy/rerun có tag riêng vì ECR đang bật immutable tags; không dùng `latest`.
-- Job deploy dùng **digest vừa publish**, chỉ cập nhật stack backend `g-scores-app` từ [`ecs-app.yaml`](../infra/ecs-app.yaml), đợi CloudFormation hoàn tất và kiểm tra tra cứu SBD qua origin lẫn API public. Giữ nguyên cluster, task family và host instance hiện có. Nếu digest/template không đổi, deploy là no-op, không restart task.
+Redis được bật ở hai profile `local` và `production`, thông qua Spring Cache.
 
-### GitHub OIDC và IAM
-
-Không lưu AWS access key trong GitHub Secrets. Job publish lấy OIDC token, assume role với credentials tạm thời:
-
-`arn:aws:iam::329539068073:role/g-scores-github-backend-ecr-push`
-
-Stack [`github-actions-ecr.yaml`](../infra/github-actions-ecr.yaml) tạo OIDC provider và role. Trust policy chỉ chấp nhận audience `sts.amazonaws.com` và subject chính xác của nhánh `development` trong repository này. Repository dùng immutable subject có owner/repository IDs; không thay bằng subject chỉ có tên repository.
-
-Role được login ECR và đọc/upload layer, push manifest vào **duy nhất** repository `gscores-be`. Không được tạo/xóa repository, deploy ECS hoặc đọc Secrets Manager.
-
-Job deploy dùng role OIDC riêng `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy`: chỉ cập nhật/đọc stack `g-scores-app` và pass role `g-scores-production-cloudformation-deploy` cho CloudFormation. Role CloudFormation chỉ đăng ký task definition, quản lý revision trong task family production, cập nhật service hiện có và đọc/pass execution role hiện có cho ECS; không có quyền sửa database volume, IAM hay đọc secrets. `iam:GetRole` trên đúng execution role cần thiết để CloudFormation resolve thuộc tính ARN.
-
-**Chỉ backend gián đoạn khi deploy:** service có một replica với `MinimumHealthyPercent=0`/`MaximumPercent=100`, nên task backend cũ dừng trước khi task mới chạy. PostgreSQL và Redis nằm ở các service/stack riêng, không bị pipeline backend dừng hoặc cập nhật; Redis cache không bị mất do restart backend. ECS deployment circuit breaker bật rollback. Nếu deploy thất bại, workflow in stack events; kiểm tra stack đã rollback và API đã phục hồi trước lượt tiếp theo. Pipeline không tự rollback lỗi smoke sau một stack update đã thành công.
-
-Nginx host không nằm trong ECS task và không được job này deploy tự động. Cấu hình [`infra/nginx.conf`](../infra/nginx.conf) được đồng bộ riêng lên `/etc/nginx/nginx.conf`, kiểm tra bằng `nginx -t` rồi reload; giữ `worker_connections 4096`. Xem [so sánh worker_connections](../k6/README.md#4-điều-chỉnh-nginx-worker_connections).
-
-### Cấu trúc ECS production
-
-| Stack / service | Trách nhiệm | Endpoint trên host |
+| Cache | Dữ liệu | Khóa |
 |---|---|---|
-| `g-scores-app` / service backend hiện có | Chỉ chạy backend; CI/CD cập nhật image | `127.0.0.1:8080` |
-| `g-scores-data` / `g-scores-postgres` | PostgreSQL độc lập, giữ volume `postgres-data` | `127.0.0.1:5432` |
-| `g-scores-data` / `g-scores-redis` | Redis độc lập, giữ cache giữa các lượt deploy backend | `127.0.0.1:6379` |
+| `scoreDistributions` | Phổ điểm | Mã môn, ví dụ `toan` |
+| `scoreCounts` | Số thí sinh theo mức điểm | Mã môn và mức điểm, ví dụ `toan:GTE_8` |
+| `topStudents` | Top 10 khối A | `A` |
 
-Cả ba service dùng host networking, được pin vào EC2 `i-0ca15f1d1e04c71f4` bằng placement constraint. PostgreSQL, Redis và backend chỉ bind loopback; Nginx tiếp tục proxy vào localhost. Không dùng Docker `Links` hoặc phụ thuộc container giữa các task.
+Lần gọi đầu truy vấn PostgreSQL và lưu kết quả vào Redis. Những lần gọi tiếp theo dùng cache cho đến khi hết TTL. TTL mặc định là **3.600 giây**, có thể đổi qua `CACHE_TTL_SECONDS` trong `.env`; giá trị phải lớn hơn `0`.
 
-[`ecs-data.yaml`](../infra/ecs-data.yaml) pin image PostgreSQL/Redis bằng digest, dùng credentials hiện có từ Secrets Manager. Volume PostgreSQL có `Autoprovision=false`: task phải dùng volume đã tồn tại, không âm thầm tạo database mới. Secrets vẫn thuộc stack `g-scores-app` và được retain; không xóa/rotate chúng độc lập khi các service data đang sử dụng.
+Khóa có prefix riêng cho từng môi trường: `g-scores:local:v1:` và `g-scores:production:v1:`. Cấu hình nằm trong [`ReportCacheConfiguration.java`](src/main/java/com/dat/backend/config/ReportCacheConfiguration.java), [`application-local.yaml`](src/main/resources/application-local.yaml) và [`application-production.yaml`](src/main/resources/application-production.yaml).
 
-Stack data không thuộc pipeline backend, và role CI không được cập nhật stack/service data. Khi cần đổi cấu hình PostgreSQL/Redis, dùng AWS credentials quản trị để cập nhật riêng:
+### Kiểm tra cache ở local
 
-```bash
-aws cloudformation deploy --template-file infra/ecs-data.yaml --stack-name g-scores-data --capabilities CAPABILITY_IAM --region ap-southeast-1 --parameter-overrides \
-  ClusterName=g-scores-ecs-EcsCluster-RA8qSZM9ePV1 \
-  DatabaseSecretArn=arn:aws:secretsmanager:ap-southeast-1:329539068073:secret:DatabaseSecret-CyFsJatIOkQH-iVfDOw \
-  RedisSecretArn=arn:aws:secretsmanager:ap-southeast-1:329539068073:secret:RedisSecret-SFlHA7EJmyfL-83JyPm \
-  --no-fail-on-empty-changeset
-```
-
-Volume và backup hiện nằm trên EC2/EBS, không phải database HA. Khi đổi host, cần chuyển/restore volume trước và cập nhật `HostInstanceId` của cả hai stack. Không chạy hai PostgreSQL trên cùng volume. Không scale backend sang host khác khi vẫn dùng endpoint loopback.
-
-Cutover ngày **07/10/2026** đã dùng lại đúng volume `postgres-data` và xác nhận **1.061.605 thí sinh** trước khi bật backend độc lập. Backup PostgreSQL custom-format trước cutover nằm tại `/var/backups/g-scores/before-ecs-split-20261007T055729Z.dump` trên EC2; đã kiểm tra archive có dữ liệu bảng `exam_scores`. Backup này cũng nằm trên host, không thay thế backup off-host.
-
-Đã kiểm chứng bằng [GitHub Actions run 37580784636](https://github.com/datnguyen101004/g-scores/actions/runs/37580784636): **34 tests pass**, build/push và deploy thành công; backend đổi task, task definition **revision 3 → 4**. Task ARN và `startedAt` của PostgreSQL/Redis giữ nguyên trước/sau deploy; cả ba task healthy, database vẫn có **1.061.605 thí sinh**, lookup trả HTTP 200 qua origin và public. Chạy lại chính bước update với digest/template không đổi đã xác nhận no-op và không thay task nào.
-
-Áp dụng/cập nhật stack từ root repository bằng AWS credentials quản trị hạ tầng:
+Sau khi khởi động Compose, chạy từ `backend/`:
 
 ```bash
-aws cloudformation deploy --template-file infra/github-actions-ecr.yaml --stack-name g-scores-github-actions-ecr --capabilities CAPABILITY_NAMED_IAM --region ap-southeast-1 --no-fail-on-empty-changeset
+docker compose exec redis redis-cli PING
+curl "http://localhost:8080/api/reports/distribution?subject=toan"
+docker compose exec redis redis-cli --scan --pattern 'g-scores:local:v1:*'
+docker compose exec redis redis-cli TTL 'g-scores:local:v1:scoreDistributions::toan'
 ```
 
-Template này sở hữu GitHub OIDC provider của account; không triển khai một bản sao nếu provider đã được stack khác quản lý. Nếu dùng repository khác, lấy subject prefix thực tế trước khi đặt parameter `GitHubSubjectPrefix`:
+`PING` trả về `PONG`; sau khi gọi API, khóa phổ điểm Toán sẽ xuất hiện và có TTL còn lại tính bằng giây. Trên Windows PowerShell, dùng `curl.exe` nếu `curl` đang là alias của PowerShell.
+
+Nếu thay dữ liệu khi phát triển và cần làm mới phổ điểm Toán ngay:
 
 ```bash
-gh api repos/datnguyen101004/g-scores/actions/oidc/customization/sub
+docker compose exec redis redis-cli DEL 'g-scores:local:v1:scoreDistributions::toan'
 ```
 
-Các **repository variables** đã cấu hình trong GitHub → Settings → Secrets and variables → Actions → Variables:
+Xóa cache tương ứng với dữ liệu đã thay đổi hoặc chờ hết TTL. Redis local không lưu cache xuống đĩa, nên cache mất khi container Redis được khởi động lại. Nếu API dùng cache báo lỗi kết nối, kiểm tra `docker compose ps`, logs của Redis và cấu hình host/cổng trước.
 
-| Variable | Giá trị |
+## CI/CD
+
+Workflow: [`.github/workflows/backend-image.yaml`](../.github/workflows/backend-image.yaml).
+
+| Sự kiện | Các bước chạy |
 |---|---|
-| `AWS_REGION` | `ap-southeast-1` |
-| `AWS_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-github-backend-ecr-push` |
-| `ECR_REPOSITORY_URI` | `329539068073.dkr.ecr.ap-southeast-1.amazonaws.com/gscores-be` |
-| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-github-backend-deploy` |
-| `CLOUDFORMATION_ROLE_ARN` | `arn:aws:iam::329539068073:role/g-scores-production-cloudformation-deploy` |
-| `ECS_STACK_NAME` | `g-scores-app` |
+| Pull request vào `development` hoặc `main` | Kiểm tra backend bằng Maven |
+| Push vào `development` | Kiểm tra → build và push image lên ECR → deploy ECS production → smoke API |
+| Chạy thủ công trên nhánh `development` | Cùng luồng build và deploy như push |
+| Chạy thủ công trên nhánh khác | Chỉ kiểm tra backend |
 
-Các giá trị này không phải secrets. Nếu đổi nhánh publish/deploy, cập nhật đồng thời workflow và parameter `GitHubBranch` của stack. Giới hạn người được push/merge vào `development`: code trên nhánh này được phép publish image và deploy production. Các Actions được pin bằng commit SHA. Task family cố định giúp cập nhật image trong đúng phạm vi IAM; thay đổi tài nguyên hạ tầng khác cần credentials quản trị, không mở rộng role CI thành admin.
+Với push và pull request, workflow chỉ chạy khi thay đổi `backend/`, `dataset/`, chính workflow hoặc hai template `infra/github-actions-ecr.yaml` và `infra/ecs-app.yaml`.
+
+### Luồng triển khai
+
+1. **Verify:** thiết lập Java 21 và chạy `bash ./mvnw -B -ntp verify` trong `backend/`.
+2. **Publish:** sau khi verify thành công, build image `linux/amd64` từ `backend/Dockerfile`, rồi đẩy lên Amazon ECR. Tag chứa commit SHA và thông tin lần chạy.
+3. **Deploy:** cập nhật CloudFormation stack bằng [`infra/ecs-app.yaml`](../infra/ecs-app.yaml). ECS nhận image theo **digest** để triển khai đúng image vừa build.
+4. **Smoke:** gọi API tra cứu `01000001` qua cả domain API và domain ứng dụng, kiểm tra trường `data.sbd` trong response.
+
+**Push vào `development` có thể triển khai thẳng lên production**, không chỉ build image. Pull request không publish hay deploy.
+
+### Cấu hình GitHub Actions
+
+Workflow dùng GitHub OIDC để nhận quyền AWS, không cần lưu AWS access keys trong repository. Các repository variables cần có:
+
+| Variable | Mục đích |
+|---|---|
+| `AWS_REGION` | Region chứa tài nguyên AWS |
+| `AWS_ROLE_ARN` | Role dùng để push image lên ECR |
+| `ECR_REPOSITORY_URI` | URI repository ECR của backend |
+| `AWS_DEPLOY_ROLE_ARN` | Role dùng để triển khai production |
+| `ECS_STACK_NAME` | Tên CloudFormation stack ứng dụng |
+| `CLOUDFORMATION_ROLE_ARN` | Execution role của CloudFormation |
+
+Tham khảo [`infra/github-actions-ecr.yaml`](../infra/github-actions-ecr.yaml) để cấu hình quyền OIDC/ECR. Workflow hiện giới hạn AWS account; nếu triển khai sang account khác, cập nhật `allowed-account-ids` trong workflow cùng các variables và quyền IAM tương ứng.
+
+Khi kiểm tra một lần deploy, mở tab **Actions** để xem job lỗi, image tag/digest và deployment summary. Nếu deploy thất bại, workflow in các CloudFormation stack events để hỗ trợ tìm nguyên nhân.
+
+## Theo dõi production với CloudWatch
+
+Dashboard: [g-scores-production](https://ap-southeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-southeast-1#dashboards:name=g-scores-production), region `ap-southeast-1`. Cần tài khoản AWS có quyền đọc CloudWatch và CloudWatch Logs.
+
+Dùng dashboard để xem:
+
+- CPU, RAM, dung lượng đĩa và trạng thái EC2.
+- CPU, memory và số task của các ECS service backend, PostgreSQL, Redis.
+- Lưu lượng API, lỗi HTTP và latency p95/p99 ghi nhận tại Nginx.
+- Logs backend, PostgreSQL, Redis và Nginx để tìm nguyên nhân lỗi.
+
+### Cập nhật cấu hình monitoring
+
+Các file liên quan:
+
+- [`infra/nginx.conf`](../infra/nginx.conf): cấu hình Nginx và access log JSON cho monitoring.
+- [`infra/cloudwatch-monitoring.yaml`](../infra/cloudwatch-monitoring.yaml): CloudWatch Agent, log groups và custom metrics. Logs Nginx được giữ 14 ngày.
+- [`infra/cloudwatch-dashboard.yaml`](../infra/cloudwatch-dashboard.yaml): các widget trên dashboard.
+
+Nếu thay cấu hình Nginx, áp dụng file lên host, chạy `sudo nginx -t`, rồi `sudo systemctl reload nginx` trước khi triển khai monitoring.
+
+Từ root repository, dùng AWS credentials có quyền triển khai:
+
+```bash
+aws cloudformation deploy --template-file infra/cloudwatch-monitoring.yaml --stack-name g-scores-monitoring --capabilities CAPABILITY_NAMED_IAM --region ap-southeast-1 --no-fail-on-empty-changeset
+aws cloudformation deploy --template-file infra/cloudwatch-dashboard.yaml --stack-name g-scores-dashboard --region ap-southeast-1 --no-fail-on-empty-changeset
+```
+
+Templates mặc định dùng tài nguyên production hiện tại. Nếu đổi host, instance role hoặc ECS service, truyền parameter overrides phù hợp. Host cần được Systems Manager quản lý để cài và cấu hình agent.
+
+Metrics và logs mới có thể cần vài phút để xuất hiện. CloudWatch có thể phát sinh phí cho custom metrics, dashboard, lưu logs và truy vấn Logs Insights; xem [bảng giá AWS](https://aws.amazon.com/cloudwatch/pricing/) khi mở rộng monitoring.
