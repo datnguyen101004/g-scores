@@ -26,8 +26,8 @@ export default function ScoresReport() {
         {ranking.loading && <p role="status" className="text-sm text-gray-500 dark:text-gray-400">{t("report.loading")}</p>}
         {ranking.error && (
           <div role="alert" className="rounded-xl border border-error-500/30 bg-error-500/5 p-4">
-            <h2 className="text-sm font-semibold text-gray-800 dark:text-white/90">{t(ranking.error.statusCode === null ? "errors.network.title" : "report.errorTitle")}</h2>
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{t(ranking.error.statusCode === null ? "errors.network.message" : "report.errorMessage")}</p>
+            <h2 className="text-sm font-semibold text-gray-800 dark:text-white/90">{t(ranking.error.kind === "timeout" ? "errors.timeout.title" : ranking.error.kind === "network" ? "errors.network.title" : "report.errorTitle")}</h2>
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{t(ranking.error.kind === "timeout" ? "errors.timeout.message" : ranking.error.kind === "network" ? "errors.network.message" : "report.errorMessage")}</p>
             <Button size="sm" variant="outline" onClick={ranking.refetch} className="mt-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">{t("errors.retry")}</Button>
           </div>
         )}

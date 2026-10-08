@@ -14,6 +14,7 @@ Số báo danh mẫu: `01000001`.
 - Xem phổ điểm, điểm trung bình và trung vị theo môn.
 - Thống kê theo mức điểm và xem top 10 khối A, bao gồm thí sinh đồng hạng.
 - Hỗ trợ tiếng Việt/tiếng Anh, giao diện sáng/tối và màn hình mobile.
+- Tra cứu phân biệt không có thí sinh (HTTP 404), lỗi mạng, timeout và lỗi hệ thống. Request quá 10 giây được hủy; nút mở lại để tra cứu hoặc thử lại, không cần reload trang.
 
 ## Chạy local
 

@@ -83,8 +83,8 @@ export default function ScoreDistributionChart() {
       <div className="mt-5" aria-live="polite">
         {error ? (
           <div role="alert" className="rounded-xl border border-error-500/30 bg-error-500/5 p-4">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">{t(error.statusCode === null ? "errors.network.title" : "report.distribution.errorTitle")}</h3>
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{t(error.statusCode === null ? "errors.network.message" : "report.errorMessage")}</p>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">{t(error.kind === "timeout" ? "errors.timeout.title" : error.kind === "network" ? "errors.network.title" : "report.distribution.errorTitle")}</h3>
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{t(error.kind === "timeout" ? "errors.timeout.message" : error.kind === "network" ? "errors.network.message" : "report.errorMessage")}</p>
             <Button size="sm" variant="outline" onClick={() => resources.forEach((resource) => resource.refetch())} className="mt-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">{t("errors.retry")}</Button>
           </div>
         ) : loading ? (
