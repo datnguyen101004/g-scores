@@ -14,9 +14,12 @@ const INVALID_DATA_MESSAGE =
 const CONNECTION_ERROR_MESSAGE =
   "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối và thử lại.";
 const REQUEST_ERROR_MESSAGE = "Yêu cầu không thành công. Vui lòng thử lại.";
+const REQUEST_TIMEOUT_MS = 10_000;
+const TIMEOUT_MESSAGE = "Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại.";
 
 function errorFromResponse(response: Response, payload: unknown): ApiError {
   const error: ApiError = {
+    kind: "http",
     statusCode: response.status,
     message: REQUEST_ERROR_MESSAGE,
   };
@@ -26,9 +29,6 @@ function errorFromResponse(response: Response, payload: unknown): ApiError {
     typeof payload === "object" &&
     !Array.isArray(payload)
   ) {
-    if ("statusCode" in payload && typeof payload.statusCode === "number") {
-      error.statusCode = payload.statusCode;
-    }
     if (
       "message" in payload &&
       typeof payload.message === "string" &&
@@ -61,6 +61,15 @@ export function useApiResource<T>(url: string | null): ApiResource<T> {
 
     const controller = new AbortController();
     let active = true;
+    const timeout = window.setTimeout(() => {
+      if (!active || controller.signal.aborted) return;
+      setResourceState({
+        requestToken,
+        data: null,
+        error: { kind: "timeout", statusCode: null, message: TIMEOUT_MESSAGE },
+      });
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
 
     const load = async () => {
       try {
@@ -78,6 +87,7 @@ export function useApiResource<T>(url: string | null): ApiResource<T> {
               requestToken,
               data: null,
               error: {
+                kind: "http",
                 statusCode: response.status,
                 message: INVALID_RESPONSE_MESSAGE,
               },
@@ -110,6 +120,7 @@ export function useApiResource<T>(url: string | null): ApiResource<T> {
             requestToken,
             data: null,
             error: {
+              kind: "http",
               statusCode: response.status,
               message: INVALID_DATA_MESSAGE,
             },
@@ -131,10 +142,13 @@ export function useApiResource<T>(url: string | null): ApiResource<T> {
           requestToken,
           data: null,
           error: {
+            kind: "network",
             statusCode: null,
             message: CONNECTION_ERROR_MESSAGE,
           },
         });
+      } finally {
+        window.clearTimeout(timeout);
       }
     };
 
@@ -142,6 +156,7 @@ export function useApiResource<T>(url: string | null): ApiResource<T> {
 
     return () => {
       active = false;
+      window.clearTimeout(timeout);
       controller.abort();
     };
   }, [requestToken, url]);

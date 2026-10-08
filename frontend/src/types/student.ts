@@ -26,6 +26,7 @@ export interface TopStudents {
 }
 
 export interface ApiError {
+  kind: "http" | "network" | "timeout";
   statusCode: number | null;
   message: string;
   timestamp?: string;

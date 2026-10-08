@@ -84,16 +84,20 @@
   },
   "errors": {
     "notFound": {
-      "title": "Chưa tìm thấy thí sinh",
-      "message": "Vui lòng kiểm tra lại số báo danh rồi tra cứu lại."
+      "title": "Không tìm thấy thí sinh",
+      "message": "Vui lòng kiểm tra số báo danh."
     },
     "network": {
       "title": "Không thể kết nối",
-      "message": "Vui lòng kiểm tra kết nối mạng của bạn rồi thử lại."
+      "message": "Vui lòng kiểm tra mạng và thử lại."
+    },
+    "timeout": {
+      "title": "Yêu cầu mất quá nhiều thời gian",
+      "message": "Vui lòng thử lại."
     },
     "server": {
-      "title": "Chưa thể tra cứu lúc này",
-      "message": "Chúng tôi chưa thể tải điểm thi. Bạn vui lòng thử lại sau ít phút."
+      "title": "Hệ thống đang gặp sự cố",
+      "message": "Vui lòng thử lại sau."
     },
     "retry": "Thử lại"
   }

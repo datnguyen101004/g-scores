@@ -125,10 +125,10 @@ export default function ScoreOverview() {
           {resource.error && (
             <div role="alert" className="rounded-xl border border-error-500/30 bg-error-500/5 p-4">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
-                {t(resource.error.statusCode === null ? "errors.network.title" : "overview.errorTitle")}
+                {t(resource.error.kind === "timeout" ? "errors.timeout.title" : resource.error.kind === "network" ? "errors.network.title" : "overview.errorTitle")}
               </h3>
               <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
-                {t(resource.error.statusCode === null ? "errors.network.message" : "report.errorMessage")}
+                {t(resource.error.kind === "timeout" ? "errors.timeout.message" : resource.error.kind === "network" ? "errors.network.message" : "report.errorMessage")}
               </p>
               <Button
                 size="sm"

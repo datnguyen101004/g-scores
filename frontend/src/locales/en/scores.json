@@ -91,6 +91,10 @@
       "title": "Unable to connect",
       "message": "Check your internet connection and try again."
     },
+    "timeout": {
+      "title": "The request took too long",
+      "message": "Please try again."
+    },
     "server": {
       "title": "Unable to look up scores",
       "message": "We couldn't load the exam scores right now. Please try again in a few minutes."

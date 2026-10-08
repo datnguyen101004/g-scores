@@ -10,8 +10,8 @@ export default function ApiErrorNotice({
   onRetry?: () => void;
 }) {
   const { t } = useTranslation("scores");
-  const notFound = error.statusCode === 404;
-  const errorKind = notFound ? "notFound" : error.statusCode === null ? "network" : "server";
+  const notFound = error.kind === "http" && error.statusCode === 404;
+  const errorKind = error.kind === "timeout" ? "timeout" : notFound ? "notFound" : error.kind === "network" ? "network" : "server";
 
   return (
     <div role="alert" className="rounded-xl border border-warning-500 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/15">
